@@ -1,4 +1,0 @@
-name = sse_describe
-description = a module for sse that is responsible for description
-core = 7.x
-configure = admin/config/content/sse_describe
