@@ -9,7 +9,7 @@ ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
 define('SECRET', 'bilibili');
-define('BASE_URL', 'localhost:8002/drupal');
+define('BASE_URL', 'http://localhost:8002/drupal');
 
 
 function send($to, $subject, $html) {
@@ -141,8 +141,11 @@ function sse_subscription_form_validate($form, &$form_state){
 //向用户发送邮件
 function sse_subscription_form_submit($form, &$form_state) {
     $email = $form_state['values']['email'];
+    $hmac = hash_hmac('md5', $email, constant('SECRET'));
 
-    send($email, 'hello_world', '<b>hi!</b>');
+    $url = constant('BASE_URL').'/sse_subscription/'.$email.'/'.$hmac;
+
+    send($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p>'.$url);
 
     drupal_set_message(t('系统已向您的邮箱发送了一封确认邮件，请进入邮箱点击链接完成后续操作'));
 }
