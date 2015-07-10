@@ -11,7 +11,7 @@ ini_set('display_startup_errors', TRUE);
 define('SECRET', 'bilibili');
 define('BASE_URL', 'http://localhost:8002/drupal');
 
-
+//发送邮件函数
 function send($to, $subject, $html) {
   $connection = new AMQPConnection('localhost', 5672, 'guest', 'guest');
   $channel = $connection->channel();
@@ -26,7 +26,6 @@ function send($to, $subject, $html) {
   $channel->close();
   $connection->close();
 }
-
 
 //帮助信息
 function sse_subscription_help($path, $arg) {
@@ -97,8 +96,9 @@ function sse_subscription_menu() {
 
     //用户点击链接进来
     $items['sse_subscription/%/%'] = array(
-        'title' => 'Current posts',
+        'title' => '订阅',
         'page callback' => '_sse_subscription_page',
+        'page arguments' => array(1, 2),
         'access arguments' => array('access sse_subscription content'),
         'type' => MENU_NORMAL_ITEM,
     );
@@ -115,7 +115,6 @@ function sse_subscription_form($form, $form_state) {
         '#title' => t('请输入您要订阅的邮箱'),
         '#size' => 30,
         '#maxlength' => 320,
-        //'#description' => t('The maximum number of links to display in the block.'),
         '#required' => TRUE,
     );
 
@@ -125,7 +124,6 @@ function sse_subscription_form($form, $form_state) {
     );
 
     return $form;
-    //return system_settings_form($form);
 }
 
 //表单验证
@@ -153,39 +151,40 @@ function sse_subscription_form_submit($form, &$form_state) {
 //添加权限
 function sse_subscription_permission() {
     return array(
-        'accsee sse_subscription content' => array(
+        'access sse_subscription content' => array(
             'title' => t('Access content for the Subscription'),
         )
     );
 }
 
-function _sse_subscription_page($arg1=null, $arg2=null) {
-/*    if ($arg1 != null)*/
-        //echo $arg1;
-    //else
-        /*echo "aaa";*/
-    $result = sse_subscription_contents('page');
-    $items = array();
+function verify_hmac($email, $token) {
+    if ($email == null || $token == null)
+        return false;
 
-    foreach ($result as $node) {
-        $items[] = array(
-            'data' => l($node->title, 'node/'.$node->nid),
-        );
-    }
+    $hmac = hash_hmac('md5', $email, constant('SECRET'));
+    if ($hmac == $token)
+        return true;
+    else
+        return false;
+}
 
-    if (empty($items)) {
+function _sse_subscription_page($email, $token) {
+    $flag = verify_hmac($email, $token);
+
+    if (!$flag) {
         $page_array['current_posts_arguments'] = array(
-            '#title' => t('All posts from the last week'),
-            '#markup' => t('No posts available.'),
+            '#title' => t('标题'),
+            '#markup' => t('非法链接'),
+            //'#title' => t('非法链接'),
         );
         return $page_array;
     } else {
         $page_array['current_posts_arguments'] = array(
-            '#title' => t('All posts from the last week'),
-            '#items' => $items,
-            '#theme' => 'item_list__sse_subscription',
+            '#title' => t('标题'),
+            '#markup' => t('合法链接'),
         );
         return $page_array;
     }
+
 }
 
