@@ -3,6 +3,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
+//帮助信息
 function sse_subscription_help($path, $arg) {
     switch ($path) {
         case 'admin/help#sse_subscription':
@@ -11,6 +12,7 @@ function sse_subscription_help($path, $arg) {
     }
 }
 
+//block信息
 function sse_subscription_block_info() {
     $blocks['sse_subscription'] = array(
         'info' => t('sse_subscription'),
@@ -19,6 +21,7 @@ function sse_subscription_block_info() {
     return $blocks;
 }
 
+//暂时没用
 function sse_subscription_contents($display) {
     //Get today's date.
     $today = getdate();
@@ -43,38 +46,21 @@ function sse_subscription_contents($display) {
     return $query->execute();
 }
 
+//前端页面
 function sse_subscription_block_view($delta = '') {
     switch ($delta) {
         case 'sse_subscription':
-            $block['subject'] = t('Current posts');
+            $block['subject'] = t('订阅');
+            $block['content'] = drupal_get_form('sse_subscription_form');
 
-            if (user_access('access content')) {
-                // Use our custom function to retrieve data.
-                $result = sse_subscription_contents('block');
-                // Array to contain items for the block to render.
-                $items = array();
-                // Iterate over the resultset and format as links.
-                foreach ($result as $node) {
-                $items[] = array(
-                    'data' => l($node->title, 'node/' . $node->nid),
-                    );
-                }
-           // No content in the last week.
-            if (empty($items)) {
-                $block['content'] = t('No posts available.');
-            } else {
-                // Pass data through theme function.
-                $block['content'] = theme('item_list', array(
-                    'items' => $items));
-            }
-        }
-        return $block;
+            return $block;
     }
 }
 
 function sse_subscription_menu() {
     $items = array();
 
+    //设置菜单，暂时没用
     $items['admin/config/content/sse_subscription'] = array(
         'title' => 'Current posts',
         'description' => 'Configuration for sse_subscription module',
@@ -84,7 +70,8 @@ function sse_subscription_menu() {
         'type' => MENU_NORMAL_ITEM,
     );
 
-    $items['sse_subscription'] = array(
+    //用户点击链接进来
+    $items['sse_subscription/%/%'] = array(
         'title' => 'Current posts',
         'page callback' => '_sse_subscription_page',
         'access arguments' => array('access sse_subscription content'),
@@ -94,30 +81,40 @@ function sse_subscription_menu() {
     return $items;
 }
 
+//表单页面
 function sse_subscription_form($form, $form_state) {
 
-    //text field
-    $form['current_posts_max'] = array(
+    //邮箱
+    $form['email'] = array(
         '#type' => 'textfield',
-        '#title' => t('Maximum number of posts'),
-        '#default_value' => variable_get('current_posts_max', 3),
-        '#size' => 2,
-        '#maxlength' => 2,
-        '#description' => t('The maximum number of links to display in the block.'),
+        '#title' => t('请输入您要订阅的邮箱'),
+        '#size' => 30,
+        '#maxlength' => 320,
+        //'#description' => t('The maximum number of links to display in the block.'),
         '#required' => TRUE,
     );
 
-    return system_settings_form($form);
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => '订阅',
+    );
+
+    return $form;
+    //return system_settings_form($form);
 }
 
-function current_posts_form_validate($form, &$form_state){
-    $max_num = $form_state['values']['current_posts_max'];
-    if (!is_numeric($max_num)){
-        form_set_error('current_posts_max', t('You must enter a number for the maximum number of posts to display.'));
+//表单验证
+function sse_subscription_form_validate($form, &$form_state){
+    $email = $form_state['values']['email'];
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+         form_set_error('email', t('请输入正确的邮箱地址！'));
     }
-    else if ($max_num <= 0){
-        form_set_error('current_posts_max', t('Maximum number of posts to display must be positive.'));
-    }
+}
+
+//处理表单
+function sse_subscription_form_submit($form, &$form_state) {
+    drupal_set_message(t('系统已向您的邮箱发送了一封确认邮件，请进入邮箱点击链接完成后续操作'));
 }
 
 //添加权限
@@ -129,7 +126,11 @@ function sse_subscription_permission() {
     );
 }
 
-function _sse_subscription_page() {
+function _sse_subscription_page($arg1=null, $arg2=null) {
+/*    if ($arg1 != null)*/
+        //echo $arg1;
+    //else
+        /*echo "aaa";*/
     $result = sse_subscription_contents('page');
     $items = array();
 
