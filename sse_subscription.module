@@ -3,6 +3,9 @@ error_reporting(E_ALL);
 ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
+variable_set('secret', 'bilibili');
+
+
 //帮助信息
 function sse_subscription_help($path, $arg) {
     switch ($path) {
@@ -113,7 +116,9 @@ function sse_subscription_form_validate($form, &$form_state){
 }
 
 //处理表单
+//向用户发送邮件
 function sse_subscription_form_submit($form, &$form_state) {
+    $email = $form_state['values']['email'];
     drupal_set_message(t('系统已向您的邮箱发送了一封确认邮件，请进入邮箱点击链接完成后续操作'));
 }
 
