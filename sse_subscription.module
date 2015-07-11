@@ -98,17 +98,122 @@ function sse_subscription_menu() {
     $items['sse_subscription/%/%'] = array(
         'title' => '订阅',
         'page callback' => '_sse_subscription_page',
-        'page arguments' => array(1, 2),
-        'access arguments' => array('access sse_subscription content'),
+        'access callback' => 'verify_hmac',
+        'access arguments' => array(1, 2),
         'type' => MENU_NORMAL_ITEM,
     );
 
     return $items;
 }
 
-//表单页面
-function sse_subscription_form($form, $form_state) {
+//选择表单
+function sse_subscription_check_form($form, $form_state) {
+    $level1 = array(
+        '1000' => t('所有本科生'),
+        '1001' => t('11级本科生'),
+        '1002' => t('12级本科生'),
+        '1003' => t('13级本科生'),
+        '1004' => t('14级本科生'),
+        '1005' => t('硕士生'),
+    );
 
+    $level2 = array(
+        '2000' => t('官方'),
+        '2001' => t('实习'),
+        '2002' => t('招聘'),
+        '2003' => t('活动'),
+    );
+
+    $form['group'] = array(
+        '#title' => t('面向群体'),
+        '#type' => 'checkboxes',
+        '#options' => $level1,
+        '#required' => TRUE,
+    );
+
+    $form['content_type'] = array(
+        '#title' => t('内容分类'),
+        '#type' => 'checkboxes',
+        '#options' => $level2,
+        '#required' => TRUE,
+    );
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => '确定',
+    );
+
+    return $form;
+}
+
+//处理表单
+//存储用户的类别
+function sse_subscription_check_form_submit($form, &$form_state) {
+    $email = $_SESSION['email'];
+    $date = new DateTime();
+    $now = $date->getTimestamp();
+
+    //第一步，清除该用户的原始订阅
+    $number_of_rows = db_select('sse_subscribe_mail')
+        ->condition('mail', $email)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+    if ($number_of_rows == 0) {
+        //新建一个用户
+        $cancle_token = md5($now);
+
+        db_insert('sse_subscribe_mail')
+            ->fields(array(
+                'mail' => $email,
+                'cancel_token' => $cancle_token,
+            ))
+            ->execute();
+    }
+
+    //修改event表
+    db_insert('sse_subscribe_events')
+        ->fields(array(
+            'at' => (int)$now,
+            'type' => 0,
+            'ua' => $_SERVER['HTTP_USER_AGENT'],
+            'ip' => $_SERVER['REMOTE_ADDR'],
+            'mail' => $email,
+        ))
+        ->execute();
+
+    //删除data表
+    $sid = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('sid'))
+        ->execute()
+        ->fetch()
+        ->sid;
+    db_delete('sse_subscribe_data')
+        ->condition('sid', $sid)
+        ->execute();
+
+    //第二步，处理订阅信息，Insert笛卡尔集
+    foreach ($form_state['values']['group'] as $group_id => $group_status) {
+        foreach ($form_state['values']['content_type'] as $type_id => $type_status) {
+            if ($group_status > 0 && $type_status >0) {
+                db_insert('sse_subscribe_data')
+                    ->fields(array(
+                        'sid' => $sid,
+                        'target_tid' => $group_id,
+                        'category_tid' => $type_id,
+                    ))
+                    ->execute();
+            }
+        }
+    }
+
+    drupal_set_message(t('操作成功'));
+}
+
+
+//订阅表单
+function sse_subscription_form($form, $form_state) {
     //邮箱
     $form['email'] = array(
         '#type' => 'textfield',
@@ -157,34 +262,21 @@ function sse_subscription_permission() {
     );
 }
 
+//验证用户
 function verify_hmac($email, $token) {
     if ($email == null || $token == null)
         return false;
 
     $hmac = hash_hmac('md5', $email, constant('SECRET'));
-    if ($hmac == $token)
+    if ($hmac == $token) {
+        $_SESSION['email'] = $email;
         return true;
+    }
     else
         return false;
 }
 
-function _sse_subscription_page($email, $token) {
-    $flag = verify_hmac($email, $token);
-
-    if (!$flag) {
-        $page_array['current_posts_arguments'] = array(
-            '#title' => t('标题'),
-            '#markup' => t('非法链接'),
-            //'#title' => t('非法链接'),
-        );
-        return $page_array;
-    } else {
-        $page_array['current_posts_arguments'] = array(
-            '#title' => t('标题'),
-            '#markup' => t('合法链接'),
-        );
-        return $page_array;
-    }
-
+function _sse_subscription_page() {
+    return drupal_get_form('sse_subscription_check_form');
 }
 
