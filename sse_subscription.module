@@ -45,31 +45,6 @@ function sse_subscription_block_info() {
     return $blocks;
 }
 
-//暂时没用
-function sse_subscription_contents($display) {
-    //Get today's date.
-    $today = getdate();
-    //Calculate the date a week ago.
-    $start_time = mktime(0, 0, 0,$today['mon'],($today['mday'] - 7), $today['year']);
-    //Get all posts from one week ago to the present.
-    $end_time = time();
-
-    $max_num = variable_get('current_posts_max', 3);
-
-    //Use Database API to retrieve current posts.
-    $query = db_select('node', 'n')
-        ->fields('n', array('nid', 'title', 'created'))
-        ->condition('status', 1) //Published.
-        ->condition('created', array($start_time, $end_time), 'BETWEEN')
-        ->orderBy('created', 'DESC'); //Most recent first.
-
-    if ($display == 'block') {
-        $query->range(0, $max_num);
-    }
-
-    return $query->execute();
-}
-
 //前端页面
 function sse_subscription_block_view($delta = '') {
     switch ($delta) {
@@ -95,12 +70,22 @@ function sse_subscription_menu() {
     );
 
     //用户点击链接进来
-    $items['sse_subscription/%/%'] = array(
+    $items['sse_subscription/subscribe/%/%'] = array(
         'title' => '订阅',
         'page callback' => '_sse_subscription_page',
         'access callback' => 'verify_hmac',
-        'access arguments' => array(1, 2),
+        'access arguments' => array(2, 3),
         'type' => MENU_NORMAL_ITEM,
+    );
+
+    //取消链接
+    $items['sse_subscription/cancel/%/%'] = array(
+         'title' => '取消订阅通知成功！',
+         'page callback' => '_sse_subscription_cancel_page',
+         'page arguments' => array(2),
+         'access callback' => 'verify_cancel_token',
+         'access arguments' => array(2, 3),
+         'type' => MENU_NORMAL_ITEM,
     );
 
     return $items;
@@ -246,7 +231,7 @@ function sse_subscription_form_submit($form, &$form_state) {
     $email = $form_state['values']['email'];
     $hmac = hash_hmac('md5', $email, constant('SECRET'));
 
-    $url = constant('BASE_URL').'/sse_subscription/'.$email.'/'.$hmac;
+    $url = constant('BASE_URL').'/sse_subscription/subscribe/'.$email.'/'.$hmac;
 
     send($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p>'.$url);
 
@@ -262,7 +247,7 @@ function sse_subscription_permission() {
     );
 }
 
-//验证用户
+//验证用户hmac
 function verify_hmac($email, $token) {
     if ($email == null || $token == null)
         return false;
@@ -276,7 +261,68 @@ function verify_hmac($email, $token) {
         return false;
 }
 
+//验证cancel_token
+function verify_cancel_token($email, $token) {
+    if ($email == null || $token == null)
+        return false;
+
+    $cancel_token = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('cancel_token'))
+        ->execute()
+        ->fetch();
+
+    if (!$cancel_token)
+        return false;
+
+    $cancel_token = $cancel_token->cancel_token;
+
+    if ($cancel_token != null && $cancel_token == $token)
+        return true;
+    else
+        return false;
+}
+
 function _sse_subscription_page() {
     return drupal_get_form('sse_subscription_check_form');
 }
 
+function _sse_subscription_cancel_page($email) {
+    $date = new DateTime();
+    $now = $date->getTimestamp();
+
+    //清除该用户的原始订阅
+
+    //修改event表
+    db_insert('sse_subscribe_events')
+        ->fields(array(
+            'at' => (int)$now,
+            'type' => 1,
+            'ua' => $_SERVER['HTTP_USER_AGENT'],
+            'ip' => $_SERVER['REMOTE_ADDR'],
+            'mail' => $email,
+        ))
+        ->execute();
+
+    //删除data表
+    $sid = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('sid'))
+        ->execute()
+        ->fetch()
+        ->sid;
+    db_delete('sse_subscribe_data')
+        ->condition('sid', $sid)
+        ->execute();
+
+    //删除mail表
+    db_delete('sse_subscribe_mail')
+        ->condition('mail', $email)
+        ->execute();
+
+    $page = array(
+        '#markup' => '',
+    );
+
+    return $page;
+}
