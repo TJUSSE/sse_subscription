@@ -402,8 +402,12 @@ function get_node_json_from_nid($nid) {
     $arr = $node->{$field_qunti}['und'];
     $result['category_target'] = [];
     foreach ($arr as $n) {
-        $target_tid[] = (int)$n['tid'];
-        $result['category_target'][] = taxonomy_term_load((int)$n['tid'])->name;
+        //hard coding
+        $name = taxonomy_term_load((int)$n['tid'])->name;
+        if ($name != '本科') {
+            $target_tid[] = (int)$n['tid'];
+            $result['category_target'][] = taxonomy_term_load((int)$n['tid'])->name;
+        }
     }
 
     $arr = $node->{$field_leibie}['und'];
