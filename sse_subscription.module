@@ -392,25 +392,32 @@ function get_node_json_from_nid($nid) {
     $node = node_load($nid);
     $result = [];
 
+    $target_tid = [];
+    $category_tid = [];
+
     $field_qunti = variable_get('field_qunti');
     $field_leibie = variable_get('field_leibie');
     $field_deadline = variable_get('field_deadline');
 
     $arr = $node->{$field_qunti}['und'];
     $result['category_target'] = [];
-    foreach($arr as $n)
+    foreach ($arr as $n) {
+        $target_tid[] = (int)$n['tid'];
         $result['category_target'][] = taxonomy_term_load((int)$n['tid'])->name;
+    }
 
     $arr = $node->{$field_leibie}['und'];
     $result['category_content'] = [];
-    foreach($arr as $n)
+    foreach ($arr as $n) {
+        $category_tid[] = (int)$n['tid'];
         $result['category_content'][] = taxonomy_term_load((int)$n['tid'])->name;
+    }
 
-    $arr = $node->{$field_deadline}['und'][0]['safe_value'];
+    $arr = $node->{$field_deadline};
     if (empty($arr))
         $result['deadline_field'] = '';
     else
-        $result['deadline_field'] = $arr;
+        $result['deadline_field'] = $arr['und'][0]['safe_value'];
 
     $result['title'] = $node->title;
     $result['publish_at'] = $node->created;
@@ -418,6 +425,19 @@ function get_node_json_from_nid($nid) {
 
     $options = array('absolute' => TRUE);
     $result['link'] = url('node/'.$nid, $options);
+
+    //查询email
+    $result_set = db_query("SELECT DISTINCT mail, cancel_token FROM sse_subscribe_data DATA LEFT JOIN sse_subscribe_mail MAIL ON MAIL.sid = DATA.sid
+        WHERE DATA.target_tid IN (:target_tids) AND DATA.category_tid IN (:category_tids)", array(
+            ':target_tids' => $target_tid,
+            ':category_tids' => $category_tid,
+        ));
+    foreach ($result_set as $target_mail) {
+        $subscribe_mail = [];
+        $subscribe_mail['mail'] = $target_mail->mail;
+        $subscribe_mail['cancel_token'] = $target_mail->cancel_token;
+        $result['subscribe_mails'][] = $subscribe_mail;
+    }
 
     return $result;
 }
