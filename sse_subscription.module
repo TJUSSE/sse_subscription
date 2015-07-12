@@ -111,22 +111,6 @@ function sse_subscription_check_form($form, $form_state) {
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level2 = taxonomy_get_term_from_vid($vid);
 
-/*    $level1 = array(*/
-        //'1000' => t('所有本科生'),
-        //'1001' => t('11级本科生'),
-        //'1002' => t('12级本科生'),
-        //'1003' => t('13级本科生'),
-        //'1004' => t('14级本科生'),
-        //'1005' => t('硕士生'),
-    /*);*/
-
-/*    $level2 = array(*/
-        //'2000' => t('官方'),
-        //'2001' => t('实习'),
-        //'2002' => t('招聘'),
-        //'2003' => t('活动'),
-    /*);*/
-
     $form['group'] = array(
         '#title' => t('面向群体'),
         '#type' => 'checkboxes',
@@ -218,7 +202,7 @@ function sse_subscription_check_form_submit($form, &$form_state) {
 function sse_subscription_config_form($form, $form_state) {
     $form['_leibie'] = array(
         '#type' => 'textfield',
-        '#title' => t('类别machine name'),
+        '#title' => t('类别vocabulary machine name'),
         '#default_value' => variable_get('_leibie', '_leibie'),
         '#size' => 30,
         '#required' => TRUE,
@@ -226,22 +210,37 @@ function sse_subscription_config_form($form, $form_state) {
 
     $form['_qunti'] = array(
         '#type' => 'textfield',
-        '#title' => t('群体machine name'),
+        '#title' => t('群体vocabulary machine name'),
         '#default_value' => variable_get('_qunti', '_qunti'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['_deadline'] = array(
+    $form['field_leibie'] = array(
         '#type' => 'textfield',
-        '#title' => t('死期machine name'),
-        '#default_value' => variable_get('_deadline', 'field_deadline'),
+        '#title' => t('类别field machine name'),
+        '#default_value' => variable_get('field_leibie', 'field__fenlei'),
+        '#size' => 30,
+        '#required' => TRUE,
+    );
+
+    $form['field_qunti'] = array(
+        '#type' => 'textfield',
+        '#title' => t('群体field machine name'),
+        '#default_value' => variable_get('field_qunti', 'field_mianxiangqunti'),
+        '#size' => 30,
+        '#required' => TRUE,
+    );
+
+    $form['field_deadline'] = array(
+        '#type' => 'textfield',
+        '#title' => t('死期field machine name'),
+        '#default_value' => variable_get('field_qunti', 'field_deadline'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
     return system_settings_form($form);
-
 }
 
 
@@ -389,10 +388,53 @@ function taxonomy_get_term_from_vid($vid) {
     return $data;
 }
 
-function _sse_subscription_get_article($from) {
-    $vid = taxonomy_vocabulary_machine_name_load('_leibie')->vid;
+function get_node_json_from_nid($nid) {
+    $node = node_load($nid);
+    $result = [];
 
-    $result = taxonomy_get_term_from_vid($vid);
+    $field_qunti = variable_get('field_qunti');
+    $field_leibie = variable_get('field_leibie');
+    $field_deadline = variable_get('field_deadline');
+
+    $arr = $node->{$field_qunti}['und'];
+    $result['category_target'] = [];
+    foreach($arr as $n)
+        $result['category_target'][] = taxonomy_term_load((int)$n['tid'])->name;
+
+    $arr = $node->{$field_leibie}['und'];
+    $result['category_content'] = [];
+    foreach($arr as $n)
+        $result['category_content'][] = taxonomy_term_load((int)$n['tid'])->name;
+
+    $arr = $node->{$field_deadline}['und'][0]['safe_value'];
+    if (empty($arr))
+        $result['deadline_field'] = '';
+    else
+        $result['deadline_field'] = $arr;
+
+    $result['title'] = $node->title;
+    $result['publish_at'] = $node->created;
+    $result['body'] = $node->body['und'][0]['safe_value'];
+
+    $options = array('absolute' => TRUE);
+    $result['link'] = url('node/'.$nid, $options);
+
+    return $result;
+}
+
+function _sse_subscription_get_article($from) {
+
+    $nids = db_select('node', 'n')
+        ->condition('changed', (int)$from, '>')
+        ->condition('type', 'tongzhi')
+        ->fields('n', array('nid'))
+        ->execute();
+
+    $result = [];
+    foreach ($nids as $record)
+        $result[] = get_node_json_from_nid($record->nid);
+
+
+    //drupal_json_output(node_load(1));
     drupal_json_output($result);
-    //drupal_json_output($from);
 }
