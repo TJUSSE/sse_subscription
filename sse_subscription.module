@@ -450,7 +450,7 @@ function _sse_subscription_get_article($from) {
 
     $nids = db_select('node', 'n')
         ->condition('changed', (int)$from, '>')
-        ->condition('type', 'tongzhi')
+        ->condition('type', 'notice')
         ->fields('n', array('nid'))
         ->execute();
 
