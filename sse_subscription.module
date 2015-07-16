@@ -59,12 +59,22 @@ function sse_subscription_block_view($delta = '') {
 function sse_subscription_menu() {
     $items = array();
 
+    //输入邮箱的地方
     $items['sse_subscription/enter'] = array(
         'title' => '输入邮箱',
         'page callback' => '_sse_subscription_enter_page',
         'access callback' => TRUE,
         'type' => MENU_NORMAL_ITEM,
     );
+
+    //发送邮件的请求
+    $items['sse_subscription/sended'] = array(
+        'title' => '已发送',
+        'page callback' => '_sse_subscription_send_page',
+        'access callback' => TRUE,
+        'type' => MENU_NORMAL_ITEM,
+    );
+
 
     //设置菜单
     $items['admin/config/content/sse_subscription'] = array(
@@ -213,72 +223,63 @@ function handle_subscribe() {
     $date = new DateTime();
     $now = $date->getTimestamp();
 
-    $machine_name = variable_get('_qunti');
-    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
-    $level1 = taxonomy_get_term_from_vid($vid);
+    //var_dump($_POST);
 
-    //$machine_name = variable_get('_leibie');
-    //$vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
-    /*$level2 = taxonomy_get_term_from_vid($vid);*/
+    //第一步，清除该用户的原始订阅
+    $number_of_rows = db_select('sse_subscribe_mail')
+        ->condition('mail', $email)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+    if ($number_of_rows == 0) {
+        //新建一个用户
+        $cancle_token = md5($now);
 
-    //var_dump($level1);
+        db_insert('sse_subscribe_mail')
+            ->fields(array(
+                'mail' => $email,
+                'cancel_token' => $cancle_token,
+            ))
+            ->execute();
+    }
 
-/*    //第一步，清除该用户的原始订阅*/
-    //$number_of_rows = db_select('sse_subscribe_mail')
-        //->condition('mail', $email)
-        //->countQuery()
-        //->execute()
-        //->fetchField();
-    //if ($number_of_rows == 0) {
-        ////新建一个用户
-        //$cancle_token = md5($now);
+    //修改event表
+    db_insert('sse_subscribe_events')
+        ->fields(array(
+            'at' => (int)$now,
+            'type' => 0,
+            'ua' => $_SERVER['HTTP_USER_AGENT'],
+            'ip' => $_SERVER['REMOTE_ADDR'],
+            'mail' => $email,
+        ))
+        ->execute();
 
-        //db_insert('sse_subscribe_mail')
-            //->fields(array(
-                //'mail' => $email,
-                //'cancel_token' => $cancle_token,
-            //))
-            //->execute();
-    //}
+    //删除data表
+    $sid = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('sid'))
+        ->execute()
+        ->fetch()
+        ->sid;
+    db_delete('sse_subscribe_data')
+        ->condition('sid', $sid)
+        ->execute();
 
-    ////修改event表
-    //db_insert('sse_subscribe_events')
-        //->fields(array(
-            //'at' => (int)$now,
-            //'type' => 0,
-            //'ua' => $_SERVER['HTTP_USER_AGENT'],
-            //'ip' => $_SERVER['REMOTE_ADDR'],
-            //'mail' => $email,
-        //))
-        //->execute();
-
-    ////删除data表
-    //$sid = db_select('sse_subscribe_mail', 'm')
-        //->condition('mail', $email)
-        //->fields('m', array('sid'))
-        //->execute()
-        //->fetch()
-        //->sid;
-    //db_delete('sse_subscribe_data')
-        //->condition('sid', $sid)
-        //->execute();
-
-    ////第二步，处理订阅信息，Insert笛卡尔集
-    //foreach ($form_state['values']['group'] as $group_id => $group_status) {
-        //foreach ($form_state['values']['content_type'] as $type_id => $type_status) {
-            //if ($group_status > 0 && $type_status >0) {
-                //db_insert('sse_subscribe_data')
-                    //->fields(array(
-                        //'sid' => $sid,
-                        //'target_tid' => $group_id,
-                        //'category_tid' => $type_id,
-                    //))
-                    //->execute();
-            //}
-        //}
-    /*}*/
+    //第二步，处理订阅信息，Insert笛卡尔集
+    foreach ($_POST['type'] as $type_id) {
+        foreach ($_POST['group'] as $group_id) {
+            db_insert('sse_subscribe_data')
+                ->fields(array(
+                    'sid' => $sid,
+                    'target_tid' => $group_id,
+                    'category_tid' => $type_id,
+                ))
+                ->execute();
+        }
+    }
 
     //返回成功的json
+    //返回个鬼
 }
 
 
@@ -410,6 +411,19 @@ function _sse_subscription_enter_page() {
     return theme("sse_subscription_enter");
 }
 
+
+//发送邮件
+function _sse_subscription_send_page() {
+    $email = $_POST['email'];
+    $hmac = hash_hmac('md5', $email, constant('SECRET'));
+
+    $url = constant('BASE_URL').'/sse_subscription/subscribe/'.$email.'/'.$hmac;
+
+    send($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p>'.$url);
+
+    return theme("sse_subscription_send");
+}
+
 //订阅菜单
 function _sse_subscription_page() {
     if ($_POST) {
@@ -469,8 +483,6 @@ function _sse_subscription_page() {
     }
     $type = $content;
 
-    //var_dump($type);
-
     $email = $_SESSION['email'];
     return theme("sse_subscription_sub", array("email" => $email, "group" => $group, "type" => $type));
 }
@@ -508,11 +520,8 @@ function _sse_subscription_cancel_page($email) {
         ->condition('mail', $email)
         ->execute();
 
-    $page = array(
-        '#markup' => '',
-    );
+    return theme("sse_subscription_unsub", array("email" => $email));
 
-    return $page;
 }
 
 function taxonomy_get_term_from_vid($vid) {
@@ -610,6 +619,13 @@ function sse_subscription_theme() {
         'sse_subscription_sub' => array(
             'template' => 'sse_subscription_sub',
             'variables' => array('email' => null, 'group' => null, 'type' => null),
+        ),
+        'sse_subscription_unsub' => array(
+            'template' => 'sse_subscription_unsub',
+            'variables' => array('email' => null),
+        ),
+        'sse_subscription_send' => array(
+            'template' => 'sse_subscription_send',
         ),
     );
 }
