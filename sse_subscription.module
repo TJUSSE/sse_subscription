@@ -31,7 +31,7 @@ function send($to, $subject, $html) {
 function sse_subscription_help($path, $arg) {
     switch ($path) {
         case 'admin/help#sse_subscription':
-            return '<p>'.t('Just enable it!');
+            return '<p>'.t('启用她就可以了!');
             break;
     }
 }
@@ -59,7 +59,14 @@ function sse_subscription_block_view($delta = '') {
 function sse_subscription_menu() {
     $items = array();
 
-    //设置菜单，暂时没用
+    $items['sse_subscription/enter'] = array(
+        'title' => '输入邮箱',
+        'page callback' => '_sse_subscription_enter_page',
+        'access callback' => TRUE,
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    //设置菜单
     $items['admin/config/content/sse_subscription'] = array(
         'title' => '设置Machine Name',
         'description' => 'Configuration for sse_subscription module',
@@ -88,6 +95,7 @@ function sse_subscription_menu() {
          'type' => MENU_NORMAL_ITEM,
     );
 
+    //推送API
     $items['sse_subscription/api/get_article/%'] = array(
         'title' => 'Get Article',
         'page callback' => '_sse_subscription_get_article',
@@ -135,7 +143,7 @@ function sse_subscription_check_form($form, $form_state) {
 
 //处理表单
 //存储用户的类别
-function sse_subscription_check_form_submit($form, &$form_state) {
+function sse_subscription_check_form_submit() {
     $email = $_SESSION['email'];
     $date = new DateTime();
     $now = $date->getTimestamp();
@@ -198,6 +206,83 @@ function sse_subscription_check_form_submit($form, &$form_state) {
     drupal_set_message(t('操作成功'));
 }
 
+//处理表单
+//存储用户的类别
+function handle_subscribe() {
+    $email = $_SESSION['email'];
+    $date = new DateTime();
+    $now = $date->getTimestamp();
+
+    $machine_name = variable_get('_qunti');
+    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
+    $level1 = taxonomy_get_term_from_vid($vid);
+
+    //$machine_name = variable_get('_leibie');
+    //$vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
+    /*$level2 = taxonomy_get_term_from_vid($vid);*/
+
+    //var_dump($level1);
+
+/*    //第一步，清除该用户的原始订阅*/
+    //$number_of_rows = db_select('sse_subscribe_mail')
+        //->condition('mail', $email)
+        //->countQuery()
+        //->execute()
+        //->fetchField();
+    //if ($number_of_rows == 0) {
+        ////新建一个用户
+        //$cancle_token = md5($now);
+
+        //db_insert('sse_subscribe_mail')
+            //->fields(array(
+                //'mail' => $email,
+                //'cancel_token' => $cancle_token,
+            //))
+            //->execute();
+    //}
+
+    ////修改event表
+    //db_insert('sse_subscribe_events')
+        //->fields(array(
+            //'at' => (int)$now,
+            //'type' => 0,
+            //'ua' => $_SERVER['HTTP_USER_AGENT'],
+            //'ip' => $_SERVER['REMOTE_ADDR'],
+            //'mail' => $email,
+        //))
+        //->execute();
+
+    ////删除data表
+    //$sid = db_select('sse_subscribe_mail', 'm')
+        //->condition('mail', $email)
+        //->fields('m', array('sid'))
+        //->execute()
+        //->fetch()
+        //->sid;
+    //db_delete('sse_subscribe_data')
+        //->condition('sid', $sid)
+        //->execute();
+
+    ////第二步，处理订阅信息，Insert笛卡尔集
+    //foreach ($form_state['values']['group'] as $group_id => $group_status) {
+        //foreach ($form_state['values']['content_type'] as $type_id => $type_status) {
+            //if ($group_status > 0 && $type_status >0) {
+                //db_insert('sse_subscribe_data')
+                    //->fields(array(
+                        //'sid' => $sid,
+                        //'target_tid' => $group_id,
+                        //'category_tid' => $type_id,
+                    //))
+                    //->execute();
+            //}
+        //}
+    /*}*/
+
+    //返回成功的json
+}
+
+
+
 //设置菜单
 function sse_subscription_config_form($form, $form_state) {
     $form['_leibie'] = array(
@@ -234,7 +319,7 @@ function sse_subscription_config_form($form, $form_state) {
 
     $form['field_deadline'] = array(
         '#type' => 'textfield',
-        '#title' => t('死期field machine name'),
+        '#title' => t('截止日期field machine name'),
         '#default_value' => variable_get('field_qunti', 'field_deadline'),
         '#size' => 30,
         '#required' => TRUE,
@@ -263,18 +348,9 @@ function sse_subscription_form($form, $form_state) {
     return $form;
 }
 
-//表单验证
-function sse_subscription_form_validate($form, &$form_state){
-    $email = $form_state['values']['email'];
-
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-         form_set_error('email', t('请输入正确的邮箱地址！'));
-    }
-}
-
 //处理表单
 //向用户发送邮件
-function sse_subscription_form_submit($form, &$form_state) {
+function sse_subscription_form_submit() {
     $email = $form_state['values']['email'];
     $hmac = hash_hmac('md5', $email, constant('SECRET'));
 
@@ -330,8 +406,73 @@ function verify_cancel_token($email, $token) {
         return false;
 }
 
+function _sse_subscription_enter_page() {
+    return theme("sse_subscription_enter");
+}
+
+//订阅菜单
 function _sse_subscription_page() {
-    return drupal_get_form('sse_subscription_check_form');
+    if ($_POST) {
+        //处理表单
+        handle_subscribe();
+    }
+
+    $machine_name = variable_get('_qunti');
+    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
+    $level1 = taxonomy_get_tree($vid);
+
+    $temp = '';
+    $content = '';
+    foreach ($level1 as $item) {
+        $tid = $item->tid;
+
+        if ($item->depth != 0) {
+            $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="group[]" value="'.$tid.'" class="css-checkbox">
+                <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
+        } else {
+            if ($temp != '') {
+                //先处理上次的结果
+                $temp = $temp.'</div>';
+                $content = $content.$temp;
+                $temp = '';
+            }
+            $temp = '<div class="class-layer">';
+            $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="group[]" value="'.$tid.'" class="css-checkbox">
+                <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
+        }
+    }
+    if ($temp != '') {
+        //先处理上次的结果
+        $temp = $temp.'</div>';
+        $content = $content.$temp;
+        $temp = '';
+    }
+    $group = $content;
+
+    $machine_name = variable_get('_leibie');
+    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
+    $level1 = taxonomy_get_tree($vid);
+
+    $temp = '<div class="class-layer">';
+    $content = '';
+    foreach ($level1 as $item) {
+        $tid = $item->tid;
+
+        $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="type[]" value="'.$tid.'" class="css-checkbox">
+            <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
+    }
+    if ($temp != '') {
+        //先处理上次的结果
+        $temp = $temp.'</div>';
+        $content = $content.$temp;
+        $temp = '';
+    }
+    $type = $content;
+
+    //var_dump($type);
+
+    $email = $_SESSION['email'];
+    return theme("sse_subscription_sub", array("email" => $email, "group" => $group, "type" => $type));
 }
 
 function _sse_subscription_cancel_page($email) {
@@ -447,7 +588,6 @@ function get_node_json_from_nid($nid) {
 }
 
 function _sse_subscription_get_article($from) {
-
     $nids = db_select('node', 'n')
         ->condition('changed', (int)$from, '>')
         ->condition('type', 'notice')
@@ -458,7 +598,18 @@ function _sse_subscription_get_article($from) {
     foreach ($nids as $record)
         $result[] = get_node_json_from_nid($record->nid);
 
-
-    //drupal_json_output(node_load(1));
     drupal_json_output($result);
+}
+
+function sse_subscription_theme() {
+
+    return array(
+        'sse_subscription_enter' => array(
+            'template' => 'sse_subscription_enter',
+        ),
+        'sse_subscription_sub' => array(
+            'template' => 'sse_subscription_sub',
+            'variables' => array('email' => null, 'group' => null, 'type' => null),
+        ),
+    );
 }
