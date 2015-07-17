@@ -9,7 +9,7 @@ ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
 define('SECRET', 'bilibili');
-define('BASE_URL', 'http://localhost:8002/drupal');
+define('BASE_URL', 'http://sse.tongji.edu.cn');
 
 //发送邮件函数
 function send($to, $subject, $html) {
@@ -68,7 +68,7 @@ function sse_subscription_menu() {
     );
 
     //发送邮件的请求
-    $items['sse_subscription/sended'] = array(
+    $items['sse_subscription/send'] = array(
         'title' => '已发送',
         'page callback' => '_sse_subscription_send_page',
         'access callback' => TRUE,
@@ -106,11 +106,12 @@ function sse_subscription_menu() {
     );
 
     //推送API
-    $items['sse_subscription/api/get_article/%'] = array(
+    $items['sse_subscription/api/get_article/%/%'] = array(
         'title' => 'Get Article',
         'page callback' => '_sse_subscription_get_article',
-        'page arguments' => array(3),
-        'access callback' => TRUE,
+        'page arguments' => array(4),
+        'access callback' => 'verify_api_token',
+        'access arguments' => array(3),
         'type' => MENU_CALLBACK,
     );
 
@@ -223,7 +224,7 @@ function handle_subscribe() {
     $date = new DateTime();
     $now = $date->getTimestamp();
 
-    //var_dump($_POST);
+    var_dump($_POST);
 
     //第一步，清除该用户的原始订阅
     $number_of_rows = db_select('sse_subscribe_mail')
@@ -371,6 +372,14 @@ function sse_subscription_permission() {
     );
 }
 
+function verify_api_token($token) {
+    if ($token == "ceeded729d8c61a44331ed8c7402e354") {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 //验证用户hmac
 function verify_hmac($email, $token) {
     if ($email == null || $token == null)
@@ -414,7 +423,7 @@ function _sse_subscription_enter_page() {
 
 //发送邮件
 function _sse_subscription_send_page() {
-    $email = $_POST['email'];
+    $email = $_POST['mail'];
     $hmac = hash_hmac('md5', $email, constant('SECRET'));
 
     $url = constant('BASE_URL').'/sse_subscription/subscribe/'.$email.'/'.$hmac;
