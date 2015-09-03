@@ -1,5 +1,4 @@
 <?php
-
 require_once __DIR__ . '/vendor/autoload.php';
 use PhpAmqpLib\Connection\AMQPConnection;
 use PhpAmqpLib\Message\AMQPMessage;
@@ -287,18 +286,18 @@ function handle_subscribe() {
 
 //设置菜单
 function sse_subscription_config_form($form, $form_state) {
-    $form['_leibie'] = array(
+    $form['leibie'] = array(
         '#type' => 'textfield',
-        '#title' => t('类别vocabulary machine name'),
-        '#default_value' => variable_get('_leibie', '_leibie'),
+        '#title' => t('通知面向类别vocabulary machine name'),
+        '#default_value' => variable_get('leibie', 'notice_category'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['_qunti'] = array(
+    $form['qunti'] = array(
         '#type' => 'textfield',
-        '#title' => t('群体vocabulary machine name'),
-        '#default_value' => variable_get('_qunti', '_qunti'),
+        '#title' => t('通知面向群体vocabulary machine name'),
+        '#default_value' => variable_get('qunti', 'notice_target'),
         '#size' => 30,
         '#required' => TRUE,
     );
@@ -440,7 +439,8 @@ function _sse_subscription_page() {
         handle_subscribe();
     }
 
-    $machine_name = variable_get('_qunti');
+    $machine_name = variable_get('qunti');
+
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
 
@@ -472,7 +472,7 @@ function _sse_subscription_page() {
     }
     $group = $content;
 
-    $machine_name = variable_get('_leibie');
+    $machine_name = variable_get('leibie');
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
 

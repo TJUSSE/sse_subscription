@@ -1,4 +1,5 @@
-name = sse_subscription
+name = SSE Subscription
 description = a module for sse that is responsible for subscription
 core = 7.x
 configure = admin/config/content/sse_subscription
+package = SSE

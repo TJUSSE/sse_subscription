@@ -39,6 +39,8 @@
         </div><!-- /content -->
 </div>
 
+<script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+<?php drupal_add_js(drupal_get_path('module', 'sse_subscription') . '/js/dialogFx.js'); ?>
 <script>
         var onReadyFunc = function() {
 
@@ -50,7 +52,7 @@
 
             $('#confirm-mail').click(function() {
                 $.ajax({
-                    'url': './send', // @罗毅 你在这里补上url
+                    'url': './send',
                     'dataType': 'html',
                     'data': {
                         'mail': $('#input-box-mail').val()
