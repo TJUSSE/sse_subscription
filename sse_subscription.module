@@ -8,7 +8,7 @@ ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
 define('SECRET', 'bilibili');
-define('BASE_URL', 'http://sse.tongji.edu.cn');
+define('BASE_URL', 'http://ssedev.tongji.edu.cn');
 
 //发送邮件函数
 function send($to, $subject, $html) {
@@ -30,7 +30,7 @@ function send($to, $subject, $html) {
 function sse_subscription_help($path, $arg) {
     switch ($path) {
         case 'admin/help#sse_subscription':
-            return '<p>'.t('启用她就可以了!');
+            return '<p>'.t('同济大学软件学院订阅系统，使用前请在设置里面填好相应属性的Machine Name');
             break;
     }
 }
@@ -580,11 +580,11 @@ function get_node_json_from_nid($nid) {
     if (empty($arr))
         $result['deadline_field'] = '';
     else
-        $result['deadline_field'] = $arr['und'][0]['safe_value'];
+        $result['deadline_field'] = $arr['und'][0]['value'];
 
     $result['title'] = $node->title;
     $result['publish_at'] = $node->created;
-    $result['body'] = $node->body['und'][0]['safe_value'];
+    $result['body'] = $node->body['und'][0]['value'];
 
     $options = array('absolute' => TRUE);
     $result['link'] = url('node/'.$nid, $options);
@@ -607,14 +607,15 @@ function get_node_json_from_nid($nid) {
 
 function _sse_subscription_get_article($from) {
     $nids = db_select('node', 'n')
+        ->condition('type', 'notice_content')
         ->condition('changed', (int)$from, '>')
-        ->condition('type', 'notice')
         ->fields('n', array('nid'))
         ->execute();
 
     $result = [];
-    foreach ($nids as $record)
+    foreach ($nids as $record) {
         $result[] = get_node_json_from_nid($record->nid);
+    }
 
     drupal_json_output($result);
 }
