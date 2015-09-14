@@ -7,8 +7,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
-define('SECRET', 'bilibili');
-define('BASE_URL', 'http://ssedev.tongji.edu.cn');
+if (!defined('SECRET')) define('SECRET', 'bilibili');
+if (!defined('BASE_URL')) define('BASE_URL', 'http://ssedev.tongji.edu.cn');
 
 //发送邮件函数
 function send($to, $subject, $html) {
