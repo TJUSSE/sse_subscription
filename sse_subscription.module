@@ -76,9 +76,9 @@ function sse_subscription_menu() {
 
 
     //设置菜单
-    $items['admin/config/content/sse_subscription'] = array(
-        'title' => '设置Machine Name',
-        'description' => 'Configuration for sse_subscription module',
+    $items['admin/config/services/sse_subscription'] = array(
+        'title' => '配置通知订阅',
+        'description' => '配置 SSE 通知订阅模块的相关设置',
         'page callback' => 'drupal_get_form',
         'page arguments' => array('sse_subscription_config_form'),
         'access arguments' => array('access administration pages'),
@@ -286,42 +286,42 @@ function handle_subscribe() {
 
 //设置菜单
 function sse_subscription_config_form($form, $form_state) {
-    $form['leibie'] = array(
+    $form['sse_subscription_taxonomy_category'] = array(
         '#type' => 'textfield',
-        '#title' => t('通知面向类别vocabulary machine name'),
-        '#default_value' => variable_get('leibie', 'notice_category'),
+        '#title' => t('通知分类术语表的机器名'),
+        '#default_value' => variable_get('sse_subscription_taxonomy_category', 'notice_category'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['qunti'] = array(
+    $form['sse_subscription_taxonomy_target'] = array(
         '#type' => 'textfield',
-        '#title' => t('通知面向群体vocabulary machine name'),
-        '#default_value' => variable_get('qunti', 'notice_target'),
+        '#title' => t('通知面向群体术语表的机器名'),
+        '#default_value' => variable_get('sse_subscription_taxonomy_target', 'notice_target'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['field_leibie'] = array(
+    $form['sse_subscription_field_category'] = array(
         '#type' => 'textfield',
-        '#title' => t('类别field machine name'),
-        '#default_value' => variable_get('field_leibie', 'field__fenlei'),
+        '#title' => t('分类字段的机器名'),
+        '#default_value' => variable_get('sse_subscription_field_category', 'field_notice_category'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['field_qunti'] = array(
+    $form['sse_subscription_field_target'] = array(
         '#type' => 'textfield',
-        '#title' => t('群体field machine name'),
-        '#default_value' => variable_get('field_qunti', 'field_mianxiangqunti'),
+        '#title' => t('面向群体字段机器名'),
+        '#default_value' => variable_get('sse_subscription_field_target', 'field_notice_target'),
         '#size' => 30,
         '#required' => TRUE,
     );
 
-    $form['field_deadline'] = array(
+    $form['sse_subscription_field_deadline'] = array(
         '#type' => 'textfield',
-        '#title' => t('截止日期field machine name'),
-        '#default_value' => variable_get('field_qunti', 'field_deadline'),
+        '#title' => t('截止时间字段机器名'),
+        '#default_value' => variable_get('sse_subscription_field_deadline', 'field_notice_deadline'),
         '#size' => 30,
         '#required' => TRUE,
     );
@@ -439,7 +439,7 @@ function _sse_subscription_page() {
         handle_subscribe();
     }
 
-    $machine_name = variable_get('qunti');
+    $machine_name = variable_get('sse_subscription_taxonomy_target');
 
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
@@ -472,7 +472,7 @@ function _sse_subscription_page() {
     }
     $group = $content;
 
-    $machine_name = variable_get('leibie');
+    $machine_name = variable_get('sse_subscription_taxonomy_category');
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
 
@@ -554,9 +554,9 @@ function get_node_json_from_nid($nid) {
     $target_tid = [];
     $category_tid = [];
 
-    $field_qunti = variable_get('field_qunti');
-    $field_leibie = variable_get('field_leibie');
-    $field_deadline = variable_get('field_deadline');
+    $field_qunti = variable_get('sse_subscription_field_target');
+    $field_leibie = variable_get('sse_subscription_field_category');
+    $field_deadline = variable_get('sse_subscription_field_deadline');
 
     $arr = $node->{$field_qunti}['und'];
     $result['category_target'] = [];
