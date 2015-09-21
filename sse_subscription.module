@@ -8,7 +8,7 @@ ini_set('display_errors', TRUE);
 ini_set('display_startup_errors', TRUE);
 
 if (!defined('SECRET')) define('SECRET', 'bilibili');
-if (!defined('BASE_URL')) define('BASE_URL', 'http://ssedev.tongji.edu.cn');
+//if (!defined('BASE_URL')) define('BASE_URL', 'http://ssedev.tongji.edu.cn');
 
 //发送邮件函数
 function send($to, $subject, $html) {
@@ -30,30 +30,30 @@ function send($to, $subject, $html) {
 function sse_subscription_help($path, $arg) {
     switch ($path) {
         case 'admin/help#sse_subscription':
-            return '<p>'.t('同济大学软件学院订阅系统，使用前请在设置里面填好相应属性的Machine Name');
+            return '<p>'.t('同济大学软件学院订阅系统，使用前请在设置里面填好相应属性的机器名');
             break;
     }
 }
 
 //block信息
-function sse_subscription_block_info() {
-    $blocks['sse_subscription'] = array(
-        'info' => t('sse_subscription'),
-        'cache' => DRUPAL_CACHE_PER_ROLE,
-    );
-    return $blocks;
-}
+//function sse_subscription_block_info() {
+    //$blocks['sse_subscription'] = array(
+        //'info' => t('sse_subscription'),
+        //'cache' => DRUPAL_CACHE_PER_ROLE,
+    //);
+    //return $blocks;
+//}
 
 //前端页面
-function sse_subscription_block_view($delta = '') {
-    switch ($delta) {
-        case 'sse_subscription':
-            $block['subject'] = t('订阅');
-            $block['content'] = drupal_get_form('sse_subscription_form');
+//function sse_subscription_block_view($delta = '') {
+    //switch ($delta) {
+        //case 'sse_subscription':
+            //$block['subject'] = t('订阅');
+            //$block['content'] = drupal_get_form('sse_subscription_form');
 
-            return $block;
-    }
-}
+            //return $block;
+    //}
+//}
 
 function sse_subscription_menu() {
     $items = array();
@@ -121,11 +121,11 @@ function sse_subscription_menu() {
 function sse_subscription_check_form($form, $form_state) {
     //首先获取一级分类
 
-    $machine_name = variable_get('_qunti');
+    $machine_name = variable_get('sse_subscription_taxonomy_target');
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_term_from_vid($vid);
 
-    $machine_name = variable_get('_leibie');
+    $machine_name = variable_get('sse_subscription_taxonomy_category');
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level2 = taxonomy_get_term_from_vid($vid);
 
