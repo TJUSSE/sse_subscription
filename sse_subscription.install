@@ -63,7 +63,7 @@ function sse_subscription_schema() {
             'at' => array('at'),
             'type' => array('type')
         ),
-        'primary key' => array('type')
+        'primary key' => array('lid')
     );
 
     $schema['sse_subscribe_data'] = array(
