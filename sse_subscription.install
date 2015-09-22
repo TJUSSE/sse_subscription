@@ -1,0 +1,102 @@
+<?php
+
+//初始化数据库
+function sse_subscription_schema() {
+    $schema['sse_subscribe_mail'] = array(
+        'fields' => array(
+            'sid' => array(
+                'type' => 'serial',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'mail' => array(
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE
+            ),
+            'cancel_token' => array(
+                'type' => 'varchar',
+                'length' => 32,
+                'not null' => TRUE
+            )
+        ),
+        'unique keys' => array(
+            'mail' => array('mail')
+        ),
+        'primary key' => array('sid')
+    );
+
+    $schema['sse_subscribe_events'] = array(
+        'fields' => array(
+            'lid' => array(
+                'type' => 'serial',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'at' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'type' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'ua' => array(
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE
+            ),
+            'ip' => array(
+                'type' => 'varchar',
+                'length' => 64,
+                'not null' => TRUE
+            ),
+            'mail' => array(
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE
+            )
+        ),
+        'indexes' => array(
+            'at' => array('at'),
+            'type' => array('type')
+        ),
+        'primary key' => array('type')
+    );
+
+    $schema['sse_subscribe_data'] = array(
+        'fields' => array(
+            'srid' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'sid' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'target_tid' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'category_tid' => array(
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+        ),
+        'unique keys' => array(
+            'sid' => array(
+                'sid', 'target_tid', 'category_tid'
+            )
+        ),
+        'primary key' => array('srid')
+    );
+
+    return $schema;
+}
+
