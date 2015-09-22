@@ -25,21 +25,10 @@ function send($to, $subject, $html) {
   $connection->close();
 }
 
-function randomString() {
-    $alphabet = "abcdefghijklmnopqrstuwxyzABCDEFGHIJKLMNOPQRSTUWXYZ0123456789";
-    $pass = array(); //remember to declare $pass as an array
-    $alphaLength = strlen($alphabet) - 1; //put the length -1 in cache
-    for ($i = 0; $i < 12; $i++) {
-        $n = rand(0, $alphaLength);
-        $pass[] = $alphabet[$n];
-    }
-    return implode($pass); //turn the array into a string
-}
-
 //初始化module
 function sse_subscription_install() {
-    variable_set('sse_subscription_secret', randomString());
-    variable_set('sse_subscription_token', randomString());
+    variable_set('sse_subscription_secret', sha1(drupal_random_bytes(16)));
+    variable_set('sse_subscription_token', sha1(drupal_random_bytes(16)));
 }
 
 //帮助信息
@@ -117,10 +106,7 @@ function sse_subscription_menu() {
 //存储用户的类别
 function handle_subscribe() {
     $email = $_SESSION['sse_subscription_email'];
-    $date = new DateTime();
-    $now = $date->getTimestamp();
-
-    //var_dump($_POST);
+    $now = time();
 
     //第一步，清除该用户的原始订阅
     $number_of_rows = db_select('sse_subscribe_mail')
@@ -130,7 +116,7 @@ function handle_subscribe() {
         ->fetchField();
     if ($number_of_rows == 0) {
         //新建一个用户
-        $cancle_token = md5($now);
+        $cancle_token = sha1($now);
 
         db_insert('sse_subscribe_mail')
             ->fields(array(
@@ -193,7 +179,7 @@ function sse_subscription_config_form($form, $form_state) {
 
     $form['sse_subscription_token'] = array(
         '#type' => 'textfield',
-        '#title' => t('获取推送文章api权限的token（加密前）'),
+        '#title' => t('获取推送文章api权限的token'),
         '#default_value' => variable_get('sse_subscription_token'),
         '#size' => 30,
         '#required' => TRUE,
@@ -233,7 +219,7 @@ function sse_subscription_permission() {
 
 function verify_api_token($token) {
     $module_token = variable_get('sse_subscription_token');
-    if ($token == "ceeded729d8c61a44331ed8c7402e354") {
+    if ($token == $module_token) {
         return true;
     } else {
         return false;
@@ -246,10 +232,7 @@ function verify_hmac($email, $token) {
         return false;
 
     $secret = variable_get('sse_subscription_secret');
-    $hmac = hash_hmac('md5', $email, $secret);
-
-    var_dump($email);
-    var_dump($secret);
+    $hmac = drupal_hmac_base64($email, $secret);
 
     if ($hmac == $token) {
         $_SESSION['sse_subscription_email'] = $email;
@@ -290,7 +273,7 @@ function _sse_subscription_enter_page() {
 function _sse_subscription_send_page() {
     $email = $_POST['mail'];
     $secret = variable_get('sse_subscription_secret');
-    $hmac = hash_hmac('md5', $email, $secret);
+    $hmac = drupal_hmac_base64($email, $secret);
 
     $url = url('sse_subscription/subscribe/'.$email.'/'.$hmac, array('absolute' => TRUE));
 
@@ -364,8 +347,7 @@ function _sse_subscription_page() {
 }
 
 function _sse_subscription_cancel_page($email) {
-    $date = new DateTime();
-    $now = $date->getTimestamp();
+    $now = time();
 
     //清除该用户的原始订阅
 
