@@ -1,22 +1,15 @@
 <?php
+
 require_once __DIR__ . '/vendor/autoload.php';
-use PhpAmqpLib\Connection\AMQPConnection;
-use PhpAmqpLib\Message\AMQPMessage;
-
-error_reporting(E_ALL);
-ini_set('display_errors', TRUE);
-ini_set('display_startup_errors', TRUE);
-
-if (!defined('SECRET')) define('SECRET', 'bilibili');
 
 //发送邮件函数
 function send($to, $subject, $html) {
-  $connection = new AMQPConnection('localhost', 5672, 'guest', 'guest');
+  $connection = new PhpAmqpLib\Connection\AMQPConnection('localhost', 5672, 'guest', 'guest');
   $channel = $connection->channel();
   $channel->exchange_declare('sse', 'direct', false, true, true);
   $channel->queue_declare('mail', false, true, false, true);
   $channel->queue_bind('mail', 'sse', 'mail');
-  $channel->basic_publish(new AMQPMessage(json_encode([
+  $channel->basic_publish(new PhpAmqpLib\Message\AMQPMessage(json_encode([
     'to' => $to,
     'subject' => $subject,
     'html' => $html,
@@ -468,7 +461,6 @@ function _sse_subscription_get_article($from) {
 }
 
 function sse_subscription_theme() {
-
     return array(
         'sse_subscription_enter' => array(
             'template' => 'sse_subscription_enter',
