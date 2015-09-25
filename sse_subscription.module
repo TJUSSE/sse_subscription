@@ -6,16 +6,40 @@ require_once __DIR__ . '/vendor/autoload.php';
  * 将邮件以高优先级增加到发送队列中
  */
 function sse_subscription_send_mail($to, $subject, $html) {
-    $connection = new PhpAmqpLib\Connection\AMQPConnection('localhost', 5672, 'guest', 'guest');
+    $connection = new \PhpAmqpLib\Connection\AMQPConnection(
+        variable_get('sse_subscription_conn_hostname'),
+        variable_get('sse_subscription_conn_port'),
+        variable_get('sse_subscription_conn_username'),
+        variable_get('sse_subscription_conn_password')
+    );
     $channel = $connection->channel();
-    $channel->exchange_declare('sse', 'direct', false, true, true);
-    $channel->queue_declare('mail', false, true, false, true);
+    $channel->exchange_declare(
+        'sse',      // exchange name
+        'direct',   // type
+        false,      // passive
+        true,       // durable
+        false       // auto_delete
+    );
+    $channel->queue_declare(
+        'mail',     // queue name
+        false,      // passive
+        true,       // durable
+        false,      // exclusive
+        false,      // auto_delete
+        false,      // nowait
+        new \PhpAmqpLib\Wire\AMQPTable([
+            'x-max-priority' => 5
+        ])
+    );
     $channel->queue_bind('mail', 'sse', 'mail');
-    $channel->basic_publish(new PhpAmqpLib\Message\AMQPMessage(json_encode([
+    $channel->basic_publish(new \PhpAmqpLib\Message\AMQPMessage(json_encode([
         'to' => $to,
         'subject' => $subject,
         'html' => $html,
-    ])), 'sse', 'mail');
+    ]), [
+        'delivery_mode' => 2,   // persistent
+        'priority' => 5,        // priority
+    ]), 'sse', 'mail');
     $channel->close();
     $connection->close();
 }
@@ -154,6 +178,34 @@ function sse_subscription_handle_verify_page_post($email, $hmac) {
  * 配置表单
  */
 function sse_subscription_config_form($form, $form_state) {
+    $form['sse_subscription_conn_hostname'] = array(
+        '#type' => 'textfield',
+        '#title' => t('消息队列服务器'),
+        '#default_value' => variable_get('sse_subscription_conn_hostname'),
+        '#size' => 50,
+        '#required' => TRUE,
+    );
+    $form['sse_subscription_conn_port'] = array(
+        '#type' => 'textfield',
+        '#title' => t('消息队列端口'),
+        '#default_value' => variable_get('sse_subscription_conn_port'),
+        '#size' => 50,
+        '#required' => TRUE,
+    );
+    $form['sse_subscription_conn_username'] = array(
+        '#type' => 'textfield',
+        '#title' => t('消息队列认证用户名'),
+        '#default_value' => variable_get('sse_subscription_conn_username'),
+        '#size' => 50,
+        '#required' => TRUE,
+    );
+    $form['sse_subscription_conn_password'] = array(
+        '#type' => 'textfield',
+        '#title' => t('消息队列认证密码'),
+        '#default_value' => variable_get('sse_subscription_conn_password'),
+        '#size' => 50,
+        '#required' => TRUE,
+    );
     $form['sse_subscription_secret'] = array(
         '#type' => 'textfield',
         '#title' => t('HMAC Secret'),
@@ -162,7 +214,6 @@ function sse_subscription_config_form($form, $form_state) {
         '#size' => 80,
         '#required' => TRUE,
     );
-
     $form['sse_subscription_token'] = array(
         '#type' => 'textfield',
         '#title' => t('API Token'),
@@ -171,7 +222,6 @@ function sse_subscription_config_form($form, $form_state) {
         '#size' => 80,
         '#required' => TRUE,
     );
-
     return system_settings_form($form);
 }
 

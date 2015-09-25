@@ -4,6 +4,18 @@
  * implement hook_enable()
  */
 function sse_subscription_enable() {
+    if (variable_get('sse_subscription_conn_hostname') === null) {
+        variable_set('sse_subscription_conn_hostname', 'localhost');
+    }
+    if (variable_get('sse_subscription_conn_port') === null) {
+        variable_set('sse_subscription_conn_port', '5672');
+    }
+    if (variable_get('sse_subscription_conn_username') === null) {
+        variable_set('sse_subscription_conn_username', 'guest');
+    }
+    if (variable_get('sse_subscription_conn_password') === null) {
+        variable_set('sse_subscription_conn_password', 'guest');
+    }
     if (variable_get('sse_subscription_secret') === null) {
         variable_set('sse_subscription_secret', sha1(drupal_random_bytes(16)));
     }
