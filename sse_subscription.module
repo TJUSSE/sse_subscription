@@ -143,7 +143,13 @@ function handle_subscribe() {
 
     //第二步，处理订阅信息，Insert笛卡尔集
     foreach ($_POST['type'] as $type_id) {
+        if (taxonomy_term_load($type_id) === false) {
+            continue;
+        }
         foreach ($_POST['group'] as $group_id) {
+            if (taxonomy_term_load($group_id) === false) {
+                continue;
+            }
             db_insert('sse_subscribe_data')
                 ->fields(array(
                     'sid' => $sid,
@@ -212,7 +218,7 @@ function sse_subscription_permission() {
 
 function verify_api_token($token) {
     $module_token = variable_get('sse_subscription_token');
-    if ($token == $module_token) {
+    if (hash_equals($module_token, $token)) {
         return true;
     } else {
         return false;
