@@ -73,7 +73,7 @@ function sse_subscription_menu() {
         'description' => '配置通知订阅',
         'page callback' => 'drupal_get_form',
         'page arguments' => array('sse_subscription_config_form'),
-        'access arguments' => array('access administration pages'),
+        'access arguments' => array('administer sse_subscription'),
         'type' => MENU_NORMAL_ITEM,
     );
 
@@ -93,7 +93,7 @@ function sse_subscription_handle_verify_page_post($email, $hmac) {
         ->countQuery()
         ->execute()
         ->fetchField();
-    if ($number_of_rows == 0) {
+    if ($number_of_rows === 0) {
         //新建一个用户
         $cancle_token = sha1($now);
 
