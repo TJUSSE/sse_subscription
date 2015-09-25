@@ -2,102 +2,88 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-//发送邮件函数
-function send($to, $subject, $html) {
-  $connection = new PhpAmqpLib\Connection\AMQPConnection('localhost', 5672, 'guest', 'guest');
-  $channel = $connection->channel();
-  $channel->exchange_declare('sse', 'direct', false, true, true);
-  $channel->queue_declare('mail', false, true, false, true);
-  $channel->queue_bind('mail', 'sse', 'mail');
-  $channel->basic_publish(new PhpAmqpLib\Message\AMQPMessage(json_encode([
-    'to' => $to,
-    'subject' => $subject,
-    'html' => $html,
-  ])), 'sse', 'mail');
-  $channel->close();
-  $connection->close();
+/**
+ * 将邮件以高优先级增加到发送队列中
+ */
+function sse_subscription_send_mail($to, $subject, $html) {
+    $connection = new PhpAmqpLib\Connection\AMQPConnection('localhost', 5672, 'guest', 'guest');
+    $channel = $connection->channel();
+    $channel->exchange_declare('sse', 'direct', false, true, true);
+    $channel->queue_declare('mail', false, true, false, true);
+    $channel->queue_bind('mail', 'sse', 'mail');
+    $channel->basic_publish(new PhpAmqpLib\Message\AMQPMessage(json_encode([
+        'to' => $to,
+        'subject' => $subject,
+        'html' => $html,
+    ])), 'sse', 'mail');
+    $channel->close();
+    $connection->close();
 }
 
-//初始化module
-function sse_subscription_install() {
-    variable_set('sse_subscription_secret', sha1(drupal_random_bytes(16)));
-    variable_set('sse_subscription_token', sha1(drupal_random_bytes(16)));
-}
-
-//帮助信息
-function sse_subscription_help($path, $arg) {
-    switch ($path) {
-        case 'admin/help#sse_subscription':
-            return '<p>'.t('同济大学软件学院订阅系统，使用前请在设置里面填好相应属性的机器名');
-            break;
-    }
-}
-
+/**
+ * implement hook_menu()
+ */
 function sse_subscription_menu() {
     $items = array();
 
-    //输入邮箱的地方
-    $items['sse_subscription/enter'] = array(
-        'title' => '输入邮箱',
-        'page callback' => '_sse_subscription_enter_page',
-        'access callback' => TRUE,
-        'type' => MENU_NORMAL_ITEM,
+    //输入邮箱页面
+    $items['subscribe'] = array(
+        'title' => '订阅',
+        'page callback' => 'sse_subscription_handle_start_page',
+        'access arguments' => array('use sse_subscription functionality'),
+        'type' => MENU_CALLBACK,
     );
 
-    //发送邮件的请求
-    $items['sse_subscription/send'] = array(
-        'title' => '已发送',
-        'page callback' => '_sse_subscription_send_page',
-        'access callback' => TRUE,
-        'type' => MENU_NORMAL_ITEM,
+    //点击验证链接
+    //subscribe/verify/:email/:hmac
+    $items['subscribe/verify/%/%'] = array(
+        'title' => '订阅',
+        'page callback' => 'sse_subscription_handle_verify_page',
+        'page arguments' => array(2, 3),
+        'access callback' => 'sse_subscription_handle_verify_page_check',
+        'access arguments' => array(2, 3),
+        'type' => MENU_CALLBACK,
     );
 
+    //点击取消链接
+    //subscribe/cancel/:email/:cancel_token
+    $items['subscribe/cancel/%/%'] = array(
+         'title' => '取消订阅通知成功！',
+         'page callback' => 'sse_subscription_handle_cancel_page',
+         'page arguments' => array(2),
+         'access callback' => 'sse_subscription_handle_cancel_page_check',
+         'access arguments' => array(2, 3),
+         'type' => MENU_CALLBACK,
+    );
 
-    //设置菜单
+    //查询需要推送的文章
+    //subscribe/api/get_article/:token/:since
+    $items['subscribe/api/get_article/%/%'] = array(
+        'title' => 'Get Article',
+        'page callback' => 'sse_subscription_handle_get_article_api',
+        'page arguments' => array(4),
+        'access callback' => 'sse_subscription_handle_get_article_api_check',
+        'access arguments' => array(3),
+        'type' => MENU_CALLBACK,
+    );
+
+    //配置
     $items['admin/config/services/sse_subscription'] = array(
-        'title' => '配置通知订阅',
-        'description' => '配置 SSE 通知订阅模块的相关设置',
+        'title' => '通知订阅',
+        'description' => '配置通知订阅',
         'page callback' => 'drupal_get_form',
         'page arguments' => array('sse_subscription_config_form'),
         'access arguments' => array('access administration pages'),
         'type' => MENU_NORMAL_ITEM,
     );
 
-    //用户点击链接进来
-    $items['sse_subscription/subscribe/%/%'] = array(
-        'title' => '订阅',
-        'page callback' => '_sse_subscription_page',
-        'access callback' => 'verify_hmac',
-        'access arguments' => array(2, 3),
-        'type' => MENU_NORMAL_ITEM,
-    );
-
-    //取消链接
-    $items['sse_subscription/cancel/%/%'] = array(
-         'title' => '取消订阅通知成功！',
-         'page callback' => '_sse_subscription_cancel_page',
-         'page arguments' => array(2),
-         'access callback' => 'verify_cancel_token',
-         'access arguments' => array(2, 3),
-         'type' => MENU_NORMAL_ITEM,
-    );
-
-    //推送API
-    $items['sse_subscription/api/get_article/%/%'] = array(
-        'title' => 'Get Article',
-        'page callback' => '_sse_subscription_get_article',
-        'page arguments' => array(4),
-        'access callback' => 'verify_api_token',
-        'access arguments' => array(3),
-        'type' => MENU_CALLBACK,
-    );
-
     return $items;
 }
 
-//处理表单
-//存储用户的类别
-function handle_subscribe() {
+/**
+ * 验证链接（订阅）页面 POST 处理
+ */
+function sse_subscription_handle_verify_page_post($email, $hmac) {
     $email = $_SESSION['sse_subscription_email'];
     $now = time();
 
@@ -164,128 +150,118 @@ function handle_subscribe() {
     //返回个鬼
 }
 
-
-
-//设置菜单
+/**
+ * 配置表单
+ */
 function sse_subscription_config_form($form, $form_state) {
     $form['sse_subscription_secret'] = array(
         '#type' => 'textfield',
-        '#title' => t('hmac用到的密钥'),
+        '#title' => t('HMAC Secret'),
+        '#description' => t('该密钥用于生成不可伪造的 Email HMAC，在订阅确认邮件中使用'),
         '#default_value' => variable_get('sse_subscription_secret'),
-        '#size' => 30,
+        '#size' => 80,
         '#required' => TRUE,
     );
 
     $form['sse_subscription_token'] = array(
         '#type' => 'textfield',
-        '#title' => t('获取推送文章api权限的token'),
+        '#title' => t('API Token'),
+        '#description' => t('该令牌用于访问获取推送文章接口，在 push-service 中使用'),
         '#default_value' => variable_get('sse_subscription_token'),
-        '#size' => 30,
+        '#size' => 80,
         '#required' => TRUE,
     );
 
     return system_settings_form($form);
 }
 
-
-//订阅表单
-function sse_subscription_form($form, $form_state) {
-    //邮箱
-    $form['email'] = array(
-        '#type' => 'textfield',
-        '#title' => t('请输入您要订阅的邮箱'),
-        '#size' => 30,
-        '#maxlength' => 320,
-        '#required' => TRUE,
-    );
-
-    $form['submit'] = array(
-        '#type' => 'submit',
-        '#value' => '订阅',
-    );
-
-    return $form;
-}
-
-//添加权限
+/**
+ * implement hook_permission()
+ * 
+ * 声明权限
+ */
 function sse_subscription_permission() {
     return array(
-        'access sse_subscription content' => array(
-            'title' => t('Access content for the Subscription'),
+        'administer sse_subscription' => array(
+            'title' => t('管理 SSE 订阅模块')
+        ),
+        'use sse_subscription functionality' => array(
+            'title' => t('订阅通知')
         )
     );
 }
 
-function verify_api_token($token) {
+function sse_subscription_handle_get_article_api_check($token) {
     $module_token = variable_get('sse_subscription_token');
-    if (hash_equals($module_token, $token)) {
-        return true;
-    } else {
-        return false;
-    }
+    return hash_equals($module_token, $token);
 }
 
 //验证用户hmac
-function verify_hmac($email, $token) {
-    if ($email == null || $token == null)
+function sse_subscription_handle_verify_page_check($email, $token) {
+    if (!user_access('use sse_subscription functionality')) {
         return false;
-
+    }
+    if ($email === null || $token === null) {
+        return false;
+    }
+    
     $secret = variable_get('sse_subscription_secret');
     $hmac = drupal_hmac_base64($email, $secret);
 
-    if ($hmac == $token) {
-        $_SESSION['sse_subscription_email'] = $email;
-        return true;
-    }
-    else
-        return false;
+    // check HMAC
+    $secret = variable_get('sse_subscription_secret');
+    $hmac = drupal_hmac_base64($email, $secret);
+    return hash_equals($hmac, $token);
 }
 
 //验证cancel_token
-function verify_cancel_token($email, $token) {
-    if ($email == null || $token == null)
+function sse_subscription_handle_cancel_page_check($email, $token) {
+    if (!user_access('use sse_subscription functionality')) {
         return false;
+    }
+    if ($email === null || $token === null) {
+        return false;
+    }
 
+    // Check Cancel Token from Database
     $cancel_token = db_select('sse_subscribe_mail', 'm')
         ->condition('mail', $email)
         ->fields('m', array('cancel_token'))
         ->execute()
         ->fetch();
 
-    if (!$cancel_token)
+    if (!$cancel_token) {
         return false;
-
+    }
     $cancel_token = $cancel_token->cancel_token;
-
-    if ($cancel_token != null && $cancel_token == $token)
-        return true;
-    else
+    if (!$cancel_token) {
         return false;
+    }
+
+    return hash_equals($cancel_token, $token);
 }
 
-function _sse_subscription_enter_page() {
+function sse_subscription_handle_start_page() {
+    if (isset($_POST['mail'])) {
+        $email = $_POST['mail'];
+        $secret = variable_get('sse_subscription_secret');
+        $hmac = drupal_hmac_base64($email, $secret);
+
+        $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
+
+        sse_subscription_send_mail($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p><p>'.$url.'</p>');
+
+        return theme("sse_subscription_send");
+    }
+
     return theme("sse_subscription_enter");
 }
 
-
-//发送邮件
-function _sse_subscription_send_page() {
-    $email = $_POST['mail'];
-    $secret = variable_get('sse_subscription_secret');
-    $hmac = drupal_hmac_base64($email, $secret);
-
-    $url = url('sse_subscription/subscribe/'.$email.'/'.$hmac, array('absolute' => TRUE));
-
-    send($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p>'.$url);
-
-    return theme("sse_subscription_send");
-}
-
 //订阅菜单
-function _sse_subscription_page() {
+function sse_subscription_handle_verify_page($email, $hmac) {
     if ($_POST) {
         //处理表单
-        handle_subscribe();
+        sse_subscription_handle_verify_page_post($email, $hmac);
     }
 
     $machine_name = 'notice_target';
@@ -341,11 +317,15 @@ function _sse_subscription_page() {
     }
     $type = $content;
 
-    $email = $_SESSION['sse_subscription_email'];
-    return theme("sse_subscription_sub", array("email" => $email, "group" => $group, "type" => $type));
+    return theme("sse_subscription_sub", [
+        "email" => $email,
+        "hmac" => $hmac,
+        "group" => $group,
+        "type" => $type,
+    ]);
 }
 
-function _sse_subscription_cancel_page($email) {
+function sse_subscription_handle_cancel_page($email) {
     $now = time();
 
     //清除该用户的原始订阅
@@ -450,7 +430,7 @@ function get_node_json_from_nid($nid) {
     return $result;
 }
 
-function _sse_subscription_get_article($from) {
+function sse_subscription_handle_get_article_api($from) {
     $nids = db_select('node', 'n')
         ->condition('type', 'notice_content')
         ->condition('status', 1)

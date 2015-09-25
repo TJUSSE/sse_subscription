@@ -51,7 +51,7 @@
 
         $('#confirm-mail').click(function() {
             $.ajax({
-                'url': './send',
+                'url': Drupal.settings.basePath + 'subscribe',
                 'dataType': 'html',
                 'data': {
                     'mail': $('#input-box-mail').val()

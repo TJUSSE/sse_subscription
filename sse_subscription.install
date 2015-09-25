@@ -1,6 +1,22 @@
 <?php
 
-//初始化数据库
+/**
+ * implement hook_enable()
+ */
+function sse_subscription_enable() {
+    if (variable_get('sse_subscription_secret') === null) {
+        variable_set('sse_subscription_secret', sha1(drupal_random_bytes(16)));
+    }
+    if (variable_get('sse_subscription_token') === null) {
+        variable_set('sse_subscription_token', sha1(drupal_random_bytes(16)));
+    }
+}
+
+/**
+ * implement hook_schema()
+ *
+ * 创建必要的表结构
+ */
 function sse_subscription_schema() {
     $schema['sse_subscribe_mail'] = array(
         'fields' => array(
