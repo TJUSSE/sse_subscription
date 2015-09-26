@@ -299,14 +299,8 @@ function sse_subscription_handle_start_page() {
         $hmac = drupal_hmac_base64($email, $secret);
 
         $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
-
         $module_path = drupal_get_path('module', 'sse_subscription');
-        $loader = new Twig_Loader_Filesystem($module_path.'/templates');
-        $twig = new Twig_Environment($loader, array(
-            'cache' => $module_path.'/cache',
-        ));
-
-        sse_subscription_send_mail($email, 'SSE订阅确认', $twig->render('subscribe.twig', array('url' => $url)));
+        sse_subscription_send_mail($email, 'SSE订阅确认', theme_render_template($module_path.'/templates/subscribe_mail.tpl.php', array('url' => $url)));
 
         return theme("sse_subscription_send");
     }
@@ -500,7 +494,7 @@ function sse_subscription_theme() {
         ),
         'sse_subscription_sub' => array(
             'template' => 'templates/sse_subscription_sub',
-            'variables' => array('email' => null, 'group' => null, 'type' => null),
+            'variables' => array('email' => null, 'target' => null, 'category' => null),
         ),
         'sse_subscription_unsub' => array(
             'template' => 'templates/sse_subscription_unsub',

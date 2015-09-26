@@ -1,6 +1,5 @@
 {
     "require": {
-	"videlalvaro/php-amqplib": "2.6.0",
-	"twig/twig": "1.22.2"
+	"videlalvaro/php-amqplib": "2.6.0"
     }
 }
