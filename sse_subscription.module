@@ -288,7 +288,7 @@ function sse_subscription_handle_start_page() {
 
         $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
         $module_path = drupal_get_path('module', 'sse_subscription');
-        sse_subscription_send_mail($email, 'SSE订阅确认', theme_render_template($module_path.'/templates/subscribe_mail.tpl.php', array('url' => $url)));
+        sse_subscription_send_mail($email, 'SSE订阅确认', theme('sse_subscription_mail', array('url' => $url)));
 
         return theme("sse_subscription_send");
     }
@@ -491,5 +491,9 @@ function sse_subscription_theme() {
         'sse_subscription_send' => array(
             'template' => 'templates/sse_subscription_send',
         ),
+        'sse_subscription_mail' => array(
+            'template' => 'templates/sse_subscription_mail',
+            'variables' => array('url' => null),
+        )
     );
 }
