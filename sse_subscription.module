@@ -316,6 +316,7 @@ function sse_subscription_handle_verify_page($email, $hmac) {
     }
 
     $machine_name = 'notice_target';
+    $field_hidden = 'field_taxonomy_target_hidden';
 
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
@@ -324,6 +325,12 @@ function sse_subscription_handle_verify_page($email, $hmac) {
     $content = '';
     foreach ($level1 as $item) {
         $tid = $item->tid;
+        $term = taxonomy_term_load($tid);
+
+        $is_hidden = $term->{$field_hidden}[LANGUAGE_NONE][0]['value'];
+        if ($is_hidden === '1') {
+            continue;
+        }
 
         if ($item->depth != 0) {
             $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="group[]" value="'.$tid.'" class="css-checkbox">
