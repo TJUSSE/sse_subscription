@@ -134,7 +134,7 @@ function sse_subscription_handle_verify_page_post($email, $hmac) {
         ->fields(array(
             'at' => (int)$now,
             'type' => 0,
-            'ua' => $_SERVER['HTTP_USER_AGENT'],
+            'ua' => isset($_SERVER['HTTP_USER_AGENT'])? $_SERVER['HTTP_USER_AGENT'] : null,
             'ip' => $_SERVER['REMOTE_ADDR'],
             'mail' => $email,
         ))
@@ -227,7 +227,7 @@ function sse_subscription_config_form($form, $form_state) {
 
 /**
  * implement hook_permission()
- * 
+ *
  * 声明权限
  */
 function sse_subscription_permission() {
@@ -254,7 +254,7 @@ function sse_subscription_handle_verify_page_check($email, $token) {
     if ($email === null || $token === null) {
         return false;
     }
-    
+
     $secret = variable_get('sse_subscription_secret');
     $hmac = drupal_hmac_base64($email, $secret);
 
@@ -385,7 +385,7 @@ function sse_subscription_handle_cancel_page($email) {
         ->fields(array(
             'at' => (int)$now,
             'type' => 1,
-            'ua' => $_SERVER['HTTP_USER_AGENT'],
+            'ua' => isset($_SERVER['HTTP_USER_AGENT'])? $_SERVER['HTTP_USER_AGENT'] : null,
             'ip' => $_SERVER['REMOTE_ADDR'],
             'mail' => $email,
         ))

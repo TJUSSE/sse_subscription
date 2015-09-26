@@ -74,7 +74,6 @@ function sse_subscription_schema() {
             'ua' => array(
                 'type' => 'varchar',
                 'length' => 255,
-                'not null' => TRUE
             ),
             'ip' => array(
                 'type' => 'varchar',
