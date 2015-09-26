@@ -20,18 +20,6 @@ function sse_subscription_send_mail($to, $subject, $html) {
         true,       // durable
         false       // auto_delete
     );
-    $channel->queue_declare(
-        'mail',     // queue name
-        false,      // passive
-        true,       // durable
-        false,      // exclusive
-        false,      // auto_delete
-        false,      // nowait
-        new \PhpAmqpLib\Wire\AMQPTable([
-            'x-max-priority' => 5
-        ])
-    );
-    $channel->queue_bind('mail', 'sse', 'mail');
     $channel->basic_publish(new \PhpAmqpLib\Message\AMQPMessage(json_encode([
         'to' => $to,
         'subject' => $subject,
