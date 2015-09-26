@@ -117,7 +117,8 @@ function sse_subscription_handle_verify_page_post($email, $hmac) {
         ->countQuery()
         ->execute()
         ->fetchField();
-    if ($number_of_rows === 0) {
+
+    if ($number_of_rows === '0') {
         //新建一个用户
         $cancle_token = sha1($now);
 
