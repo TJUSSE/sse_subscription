@@ -326,11 +326,12 @@ function sse_subscription_handle_verify_page($email, $hmac) {
 
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
+    $target = array();
+    $number_of_layers = -1;
 
-    $temp = '';
-    $content = '';
     foreach ($level1 as $item) {
         $tid = $item->tid;
+        $name = $item->name;
         $term = taxonomy_term_load($tid);
 
         $is_hidden = $term->{$field_hidden}[LANGUAGE_NONE][0]['value'];
@@ -338,54 +339,36 @@ function sse_subscription_handle_verify_page($email, $hmac) {
             continue;
         }
 
-        if ($item->depth != 0) {
-            $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="group[]" value="'.$tid.'" class="css-checkbox">
-                <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
-        } else {
-            if ($temp != '') {
-                //先处理上次的结果
-                $temp = $temp.'</div>';
-                $content = $content.$temp;
-                $temp = '';
-            }
-            $temp = '<div class="class-layer">';
-            $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="group[]" value="'.$tid.'" class="css-checkbox">
-                <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
+        if ($item->depth === 0) {
+            $target[] = array();
+            $number_of_layers++;
         }
+
+        $target[$number_of_layers][] = array(
+            'tid' => $tid,
+            'name' => $name
+        );
     }
-    if ($temp != '') {
-        //先处理上次的结果
-        $temp = $temp.'</div>';
-        $content = $content.$temp;
-        $temp = '';
-    }
-    $group = $content;
 
     $machine_name = 'notice_category';
     $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
     $level1 = taxonomy_get_tree($vid);
+    $category = array();
 
-    $temp = '<div class="class-layer">';
-    $content = '';
     foreach ($level1 as $item) {
         $tid = $item->tid;
+        $name = $item->name;
 
-        $temp = $temp.'<input id="checkbox'.$tid.'" type="checkbox" name="type[]" value="'.$tid.'" class="css-checkbox">
-            <label for="checkbox'.$tid.'" class="css-label sme depressed" style="width: 122.5px;">'.$item->name.'</label>';
+        $category[] = array(
+            'tid' => $tid,
+            'name' => $name
+        );
     }
-    if ($temp != '') {
-        //先处理上次的结果
-        $temp = $temp.'</div>';
-        $content = $content.$temp;
-        $temp = '';
-    }
-    $type = $content;
 
     return theme("sse_subscription_sub", [
         "email" => $email,
-        "hmac" => $hmac,
-        "group" => $group,
-        "type" => $type,
+        "target" => $target,
+        "category" => $category,
     ]);
 }
 

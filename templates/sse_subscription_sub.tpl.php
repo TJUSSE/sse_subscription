@@ -15,11 +15,23 @@
                 <p class="user-mail">为<?php print $email; ?>设置订阅</p>
                 <div id="class-one">
                     <h3>面向群体</h3>
-                    <?php print $group; ?>
+                    <?php foreach ($target as $layer) { ?>
+                        <div class="class-layer">
+                        <?php foreach ($layer as $item) { ?>
+                            <input id="checkbox11" type="checkbox" name="group[]" value="<?php echo $item['tid']; ?>" class="css-checkbox">
+                            <label for="checkbox11" class="css-label sme depressed" style="width: 395px;"><?php echo $item['name']; ?></label>
+                        <?php } ?>
+                        </div>
+                    <?php } ?>
                 </div>
                 <div id="class-two">
                     <h3>通知内容</h3>
-                    <?php print $type; ?>
+                    <div class="class-layer">
+                    <?php foreach ($category as $item) { ?>
+                        <input id="checkbox11" type="checkbox" name="type[]" value="<?php echo $item['tid']; ?>" class="css-checkbox">
+                        <label for="checkbox11" class="css-label sme depressed" style="width: 395px;"><?php echo $item['name']; ?></label>
+                    <?php } ?>
+                    </div>
                 </div>
                 <div class="class-layer">
                     <input type="submit" name="cancel" value="订阅" class="button button-sub" id="sub-bu">
