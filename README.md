@@ -9,3 +9,5 @@ sse_subscription
 # cd sseweb/sites/default/modules/sse_subscription
 composer install
 ```
+
+使用前请确保cache的权限为`777`

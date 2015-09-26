@@ -300,7 +300,13 @@ function sse_subscription_handle_start_page() {
 
         $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
 
-        sse_subscription_send_mail($email, 'SSE订阅确认', '<p>请点击以下链接完成订阅：</p><p>'.$url.'</p>');
+        $module_path = drupal_get_path('module', 'sse_subscription');
+        $loader = new Twig_Loader_Filesystem($module_path.'/templates');
+        $twig = new Twig_Environment($loader, array(
+            'cache' => $module_path.'/cache',
+        ));
+
+        sse_subscription_send_mail($email, 'SSE订阅确认', $twig->render('subscribe.twig', array('url' => $url)));
 
         return theme("sse_subscription_send");
     }
@@ -507,18 +513,18 @@ function sse_subscription_handle_get_article_api($from) {
 function sse_subscription_theme() {
     return array(
         'sse_subscription_enter' => array(
-            'template' => 'sse_subscription_enter',
+            'template' => 'templates/sse_subscription_enter',
         ),
         'sse_subscription_sub' => array(
-            'template' => 'sse_subscription_sub',
+            'template' => 'templates/sse_subscription_sub',
             'variables' => array('email' => null, 'group' => null, 'type' => null),
         ),
         'sse_subscription_unsub' => array(
-            'template' => 'sse_subscription_unsub',
+            'template' => 'templates/sse_subscription_unsub',
             'variables' => array('email' => null),
         ),
         'sse_subscription_send' => array(
-            'template' => 'sse_subscription_send',
+            'template' => 'templates/sse_subscription_send',
         ),
     );
 }
