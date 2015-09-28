@@ -33,6 +33,32 @@ function sse_subscription_send_mail($to, $subject, $html) {
 }
 
 /**
+ * implement hook_block_info()
+ *
+ * 创建「通知订阅」的区块
+ */
+function sse_subscription_block_info() {
+    $blocks = [];
+    $blocks['notice_subscribe_block']['info'] = t('SSE: 通知订阅区块');
+    $blocks['notice_subscribe_block']['cache'] = DRUPAL_CACHE_GLOBAL;
+    return $blocks;
+}
+
+/**
+ * implement hook_block_view()
+ */
+function sse_subscription_block_view($delta = '') {
+    if ($delta === 'notice_subscribe_block') {
+        $block = [];
+        $block['subject'] = t('通知订阅');
+        $block['content'] = theme('notice_subscribe_block', [
+            'url' => url('subscribe')
+        ]);
+        return $block;
+    }
+}
+
+/**
  * implement hook_menu()
  */
 function sse_subscription_menu() {
@@ -475,6 +501,9 @@ function sse_subscription_handle_get_article_api($from) {
     drupal_json_output($result);
 }
 
+/**
+ * implement hook_theme
+ */
 function sse_subscription_theme() {
     return array(
         'sse_subscription_enter' => array(
