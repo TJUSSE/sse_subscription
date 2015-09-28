@@ -40,7 +40,7 @@ function sse_subscription_menu() {
 
     //输入邮箱页面
     $items['subscribe'] = array(
-        'title' => '订阅',
+        'title' => '订阅通知',
         'page callback' => 'sse_subscription_handle_start_page',
         'access arguments' => array('use sse_subscription functionality'),
         'type' => MENU_CALLBACK,
@@ -288,9 +288,21 @@ function sse_subscription_handle_start_page() {
 
         $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
         $module_path = drupal_get_path('module', 'sse_subscription');
-        sse_subscription_send_mail($email, 'SSE订阅确认', theme('sse_subscription_mail', array('url' => $url)));
 
-        return theme("sse_subscription_send");
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            // invalid emailaddress
+            drupal_json_output(array(
+                'ok' => false,
+            ));
+        } else {
+            sse_subscription_send_mail($email, 'SSE订阅确认', theme('sse_subscription_mail', array('url' => $url)));
+            drupal_json_output(array(
+                'ok' => true,
+            ));
+        }
+
+        return;
     }
 
     return theme("sse_subscription_enter");
@@ -487,9 +499,6 @@ function sse_subscription_theme() {
         'sse_subscription_unsub' => array(
             'template' => 'templates/sse_subscription_unsub',
             'variables' => array('email' => null),
-        ),
-        'sse_subscription_send' => array(
-            'template' => 'templates/sse_subscription_send',
         ),
         'sse_subscription_mail' => array(
             'template' => 'templates/sse_subscription_mail',
