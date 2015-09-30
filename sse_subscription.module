@@ -40,7 +40,7 @@ function sse_subscription_send_mail($to, $subject, $html) {
 function sse_subscription_block_info() {
     $blocks = [];
     $blocks['notice_subscribe_block']['info'] = t('SSE: 通知订阅区块');
-    $blocks['notice_subscribe_block']['cache'] = DRUPAL_CACHE_GLOBAL;
+    $blocks['notice_subscribe_block']['cache'] = DRUPAL_NO_CACHE;
     return $blocks;
 }
 
