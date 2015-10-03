@@ -2,6 +2,9 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+const sse_subscription_event_type_subscribe = 0;
+const sse_subscription_event_type_unsubscribe = 1;
+
 /**
  * 将邮件以高优先级增加到发送队列中
  */
@@ -52,7 +55,7 @@ function sse_subscription_block_view($delta = '') {
         $block = [];
         $block['subject'] = t('通知订阅');
         $block['content'] = theme('notice_subscribe_block', [
-            'url' => url('subscribe')
+            'url' => sse_subscription_build_enter_url()
         ]);
         return $block;
     }
@@ -65,6 +68,7 @@ function sse_subscription_menu() {
     $items = array();
 
     //输入邮箱页面
+    //subscribe
     $items['subscribe'] = array(
         'title' => '订阅通知',
         'page callback' => 'sse_subscription_handle_start_page',
@@ -75,7 +79,7 @@ function sse_subscription_menu() {
     //点击验证链接
     //subscribe/verify/:email/:hmac
     $items['subscribe/verify/%/%'] = array(
-        'title' => '订阅',
+        'title' => '订阅通知',
         'page callback' => 'sse_subscription_handle_verify_page',
         'page arguments' => array(2, 3),
         'access callback' => 'sse_subscription_handle_verify_page_check',
@@ -116,77 +120,6 @@ function sse_subscription_menu() {
     );
 
     return $items;
-}
-
-/**
- * 验证链接（订阅）页面 POST 处理
- */
-function sse_subscription_handle_verify_page_post($email, $hmac) {
-    $email = $_SESSION['sse_subscription_email'];
-    $now = time();
-
-    //第一步，清除该用户的原始订阅
-    $number_of_rows = db_select('sse_subscribe_mail')
-        ->condition('mail', $email)
-        ->countQuery()
-        ->execute()
-        ->fetchField();
-
-    if ($number_of_rows === '0') {
-        //新建一个用户
-        $cancle_token = sha1($now);
-
-        db_insert('sse_subscribe_mail')
-            ->fields(array(
-                'mail' => $email,
-                'cancel_token' => $cancle_token,
-            ))
-            ->execute();
-    }
-
-    //修改event表
-    db_insert('sse_subscribe_events')
-        ->fields(array(
-            'at' => (int)$now,
-            'type' => 0,
-            'ua' => isset($_SERVER['HTTP_USER_AGENT'])? $_SERVER['HTTP_USER_AGENT'] : null,
-            'ip' => $_SERVER['REMOTE_ADDR'],
-            'mail' => $email,
-        ))
-        ->execute();
-
-    //删除data表
-    $sid = db_select('sse_subscribe_mail', 'm')
-        ->condition('mail', $email)
-        ->fields('m', array('sid'))
-        ->execute()
-        ->fetch()
-        ->sid;
-    db_delete('sse_subscribe_data')
-        ->condition('sid', $sid)
-        ->execute();
-
-    //第二步，处理订阅信息，Insert笛卡尔集
-    foreach ($_POST['type'] as $type_id) {
-        if (taxonomy_term_load($type_id) === false) {
-            continue;
-        }
-        foreach ($_POST['group'] as $group_id) {
-            if (taxonomy_term_load($group_id) === false) {
-                continue;
-            }
-            db_insert('sse_subscribe_data')
-                ->fields(array(
-                    'sid' => $sid,
-                    'target_tid' => $group_id,
-                    'category_tid' => $type_id,
-                ))
-                ->execute();
-        }
-    }
-
-    //返回成功的json
-    //返回个鬼
 }
 
 /**
@@ -256,30 +189,72 @@ function sse_subscription_permission() {
     );
 }
 
+/**
+ * 获得 Email 对应的 HMAC
+ */
+function _sse_subscription_get_subscription_hmac($email) {
+    $secret = variable_get('sse_subscription_secret');
+    $hmac = drupal_hmac_base64($email, $secret);
+    return $hmac;
+}
+
+/**
+ * 获得发起订阅的地址
+ */
+function sse_subscription_build_enter_url($absolute = false) {
+    return url('subscribe', ['absolute' => $absolute]);
+}
+
+/**
+ * 获得修改订阅选项的地址
+ */
+function sse_subscription_build_verify_url($email, $absolute = false) {
+    $hmac = _sse_subscription_get_subscription_hmac($email);
+    return url('subscribe/verify/'.$email.'/'.$hmac, ['absolute' => $absolute]);
+}
+
+/**
+ * 获得取消订阅的地址
+ */
+function sse_subscription_build_cancel_url($email, $absolute = false) {
+    $row = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('cancel_token'))
+        ->execute()
+        ->fetch();
+    if ($row === false) {
+        return null;
+    }
+    return url('subscribe/cancel/'.$email.'/'.$row->cancel_token, ['absolute' => $absolute]);
+}
+
+/**
+ * Verify /subscribe/api/get_article/:token/:since
+ */
 function sse_subscription_handle_get_article_api_check($token) {
     $module_token = variable_get('sse_subscription_token');
     return hash_equals($module_token, $token);
 }
 
-//验证用户hmac
-function sse_subscription_handle_verify_page_check($email, $token) {
+/**
+ * Verify /subscribe/verify/:email/:hmac
+ */
+function sse_subscription_handle_verify_page_check($email, $hmac_user) {
     if (!user_access('use sse_subscription functionality')) {
         return false;
     }
-    if ($email === null || $token === null) {
+    if ($email === null || $hmac_user === null) {
         return false;
     }
 
-    $secret = variable_get('sse_subscription_secret');
-    $hmac = drupal_hmac_base64($email, $secret);
-
     // check HMAC
-    $secret = variable_get('sse_subscription_secret');
-    $hmac = drupal_hmac_base64($email, $secret);
-    return hash_equals($hmac, $token);
+    $hmac = _sse_subscription_get_subscription_hmac($email);
+    return hash_equals($hmac, $hmac_user);
 }
 
-//验证cancel_token
+/**
+ * Verify /subscribe/cancel/:email/:cancel_token
+ */
 function sse_subscription_handle_cancel_page_check($email, $token) {
     if (!user_access('use sse_subscription functionality')) {
         return false;
@@ -288,161 +263,229 @@ function sse_subscription_handle_cancel_page_check($email, $token) {
         return false;
     }
 
-    // Check Cancel Token from Database
-    $cancel_token = db_select('sse_subscribe_mail', 'm')
+    $row = db_select('sse_subscribe_mail', 'm')
         ->condition('mail', $email)
         ->fields('m', array('cancel_token'))
         ->execute()
         ->fetch();
 
-    if (!$cancel_token) {
-        return false;
-    }
-    $cancel_token = $cancel_token->cancel_token;
-    if (!$cancel_token) {
+    if ($row === false) {
         return false;
     }
 
-    return hash_equals($cancel_token, $token);
+    return hash_equals($row->cancel_token, $token);
 }
 
+/**
+ * GET /subscribe
+ */
 function sse_subscription_handle_start_page() {
-    if (isset($_POST['mail'])) {
-        $email = $_POST['mail'];
-        $secret = variable_get('sse_subscription_secret');
-        $hmac = drupal_hmac_base64($email, $secret);
-
-        $url = url('subscribe/verify/'.$email.'/'.$hmac, array('absolute' => TRUE));
-        $module_path = drupal_get_path('module', 'sse_subscription');
-
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            // invalid emailaddress
-            drupal_json_output(array(
-                'ok' => false,
-            ));
-        } else {
-            sse_subscription_send_mail($email, 'SSE订阅确认', theme('sse_subscription_mail', array('url' => $url)));
-            drupal_json_output(array(
-                'ok' => true,
-            ));
-        }
-
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        sse_subscription_handle_start_page_post();
         return;
     }
-
-    return theme("sse_subscription_enter");
-}
-
-//订阅菜单
-function sse_subscription_handle_verify_page($email, $hmac) {
-    if ($_POST) {
-        //处理表单
-        sse_subscription_handle_verify_page_post($email, $hmac);
-    }
-
-    $machine_name = 'notice_target';
-    $field_hidden = 'field_taxonomy_target_hidden';
-
-    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
-    $level1 = taxonomy_get_tree($vid);
-    $target = array();
-    $number_of_layers = -1;
-
-    foreach ($level1 as $item) {
-        $tid = $item->tid;
-        $name = $item->name;
-        $term = taxonomy_term_load($tid);
-
-        $is_hidden = $term->{$field_hidden}[LANGUAGE_NONE][0]['value'];
-        if ($is_hidden === '1') {
-            continue;
-        }
-
-        if ($item->depth === 0) {
-            $target[] = array();
-            $number_of_layers++;
-        }
-
-        $target[$number_of_layers][] = array(
-            'tid' => $tid,
-            'name' => $name
-        );
-    }
-
-    $machine_name = 'notice_category';
-    $vid = taxonomy_vocabulary_machine_name_load($machine_name)->vid;
-    $level1 = taxonomy_get_tree($vid);
-    $category = array();
-
-    foreach ($level1 as $item) {
-        $tid = $item->tid;
-        $name = $item->name;
-
-        $category[] = array(
-            'tid' => $tid,
-            'name' => $name
-        );
-    }
-
-    return theme("sse_subscription_sub", [
-        "email" => $email,
-        "target" => $target,
-        "category" => $category,
+    return theme('sse_subscription_enter', [
+        'post_action' => sse_subscription_build_enter_url()
     ]);
 }
 
-function sse_subscription_handle_cancel_page($email) {
-    $now = time();
+/**
+ * POST /subscribe
+ * json response
+ */
+function sse_subscription_handle_start_page_post() {
+    if (!isset($_POST['email'])) {
+        drupal_json_output([
+            'ok' => false,
+            'message' => t('请输入 Email')
+        ]);
+        return;
+    }
+    if (!valid_email_address($_POST['email'])) {
+        drupal_json_output([
+            'ok' => false,
+            'message' => t('请输入格式正确的 Email')
+        ]);
+        return;
+    }
 
-    //清除该用户的原始订阅
+    // 发送邮件
+    $email = $_POST['email'];
+    $url = sse_subscription_build_verify_url($email, true);
+    sse_subscription_send_mail($email, '确认订阅同济大学软件学院通知', theme('sse_subscription_mail', ['verify_url' => $url]));
 
-    //修改event表
+    drupal_json_output([
+        'ok' => true,
+        'email' => $email
+    ]);
+}
+
+/**
+ * GET /subscribe/verify/:email/:hmac
+ */
+function sse_subscription_handle_verify_page($email, $hmac) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        //处理表单
+        sse_subscription_handle_verify_page_post($email, $hmac);
+        return;
+    }
+
+    // 获取 notice_target 和 notice_category
+    $topics = ['notice_target', 'notice_category'];
+    $ret = [];
+    foreach ($topics as &$machine_name) {
+        $data = sse_util_get_nested_taxonomy_tree($machine_name);
+        $ret[] = [
+            'machine_name' => $machine_name,
+            'title' => $data['vocabulary']->name,
+            'tree' => $data['tree']
+        ];
+    }
+    unset($machine_name);
+
+    return theme('sse_subscription_sub', [
+        'post_action' => sse_subscription_build_verify_url($email),
+        'email' => $email,
+        'topics' => $ret,
+        'cancel_action' => sse_subscription_build_cancel_url($email),
+    ]);
+}
+
+/**
+ * POST /subscribe/verify/:email/:hmac
+ * json response
+ */
+function sse_subscription_handle_verify_page_post($email, $hmac) {
+    // 检查选项
+    if (!isset($_POST['options'])) {
+        drupal_json_output([
+            'ok' => false,
+            'message' => '无效递交数据'
+        ]);
+        return;
+    }
+    $options = json_decode($_POST['options'], true);
+    if ($options === null) {
+        drupal_json_output([
+            'ok' => false,
+            'message' => '无效递交数据'
+        ]);
+        return;
+    }
+
+    // 过滤掉无效的值
+    foreach (['notice_target', 'notice_category'] as $machine_name) {
+        if (!isset($options[$machine_name])) {
+            $options[$machine_name] = [];
+        }
+        if (count($options[$machine_name]) === 0) {
+            continue;
+        }
+        $vocabulary = taxonomy_vocabulary_machine_name_load($machine_name);
+        $list = taxonomy_get_tree($vocabulary->vid);
+        $valids = [];
+        foreach ($list as &$item) {
+            $valids[] = $item->tid;
+        }
+        unset($item);
+        $options[$machine_name] = array_filter($options[$machine_name], function ($tid) use ($valids) {
+            return (in_array($tid, $valids));
+        });
+    }
+
+    $row = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('sid'))
+        ->execute()
+        ->fetch();
+
+    // 如果是第一次订阅，添加记录
+    if ($row === false) {
+        $cancel_token = sha1(drupal_random_bytes(16));
+        $sid = db_insert('sse_subscribe_mail')
+            ->fields(array(
+                'mail' => $email,
+                'cancel_token' => $cancel_token,
+            ))
+            ->execute();
+    } else {
+        $sid = $row->sid;
+    }
+
+    // 添加事件
     db_insert('sse_subscribe_events')
         ->fields(array(
-            'at' => (int)$now,
-            'type' => 1,
+            'at' => time(),
+            'type' => sse_subscription_event_type_subscribe,
             'ua' => isset($_SERVER['HTTP_USER_AGENT'])? $_SERVER['HTTP_USER_AGENT'] : null,
             'ip' => $_SERVER['REMOTE_ADDR'],
             'mail' => $email,
         ))
         ->execute();
 
-    //删除data表
-    $sid = db_select('sse_subscribe_mail', 'm')
-        ->condition('mail', $email)
-        ->fields('m', array('sid'))
-        ->execute()
-        ->fetch()
-        ->sid;
+    // 删除之前订阅的内容
     db_delete('sse_subscribe_data')
         ->condition('sid', $sid)
         ->execute();
 
-    //删除mail表
-    db_delete('sse_subscribe_mail')
-        ->condition('mail', $email)
-        ->execute();
-
-    return theme("sse_subscription_unsub", array("email" => $email));
-
-}
-
-function taxonomy_get_term_from_vid($vid) {
-    $query = db_select('taxonomy_term_data', 't');
-    $query->join('taxonomy_term_hierarchy', 'h', 'h.tid = t.tid');
-    $query->fields('t', array('tid', 'name'));
-    $query->condition('t.vid', $vid, '=');
-    //$query->condition('h.parent', 0, '='); // remove this line to get all terms.
-    $result = $query->execute();
-    while ($record = $result->fetchAssoc()) {
-        $data[$record['tid']] = t($record['name']);
+    // 插入笛卡尔积
+    foreach ($options['notice_category'] as $type_id) {
+        foreach ($options['notice_target'] as $group_id) {
+            db_insert('sse_subscribe_data')
+                ->fields(array(
+                    'sid' => $sid,
+                    'target_tid' => $group_id,
+                    'category_tid' => $type_id,
+                ))
+                ->execute();
+        }
     }
 
-    return $data;
+    drupal_json_output([
+        'ok' => true,
+        'email' => $email
+    ]);
 }
 
-function get_node_json_from_nid($nid) {
+/**
+ * GET /subscribe/cancel/:email/:cancel_token
+ */
+function sse_subscription_handle_cancel_page($email) {
+    // 添加事件
+    db_insert('sse_subscribe_events')
+        ->fields(array(
+            'at' => time(),
+            'type' => sse_subscription_event_type_unsubscribe,
+            'ua' => isset($_SERVER['HTTP_USER_AGENT'])? $_SERVER['HTTP_USER_AGENT'] : null,
+            'ip' => $_SERVER['REMOTE_ADDR'],
+            'mail' => $email,
+        ))
+        ->execute();
+
+    // 删除订阅的内容
+    $row = db_select('sse_subscribe_mail', 'm')
+        ->condition('mail', $email)
+        ->fields('m', array('sid'))
+        ->execute()
+        ->fetch();
+
+    if ($row !== false) {
+        $sid = $row->sid;
+        db_delete('sse_subscribe_data')
+            ->condition('sid', $sid)
+            ->execute();
+        db_delete('sse_subscribe_mail')
+            ->condition('sid', $sid)
+            ->execute();
+    }
+
+    return theme('sse_subscription_unsub', [
+        'email' => $email,
+        'subscribe_action' => sse_subscription_build_verify_url($email)
+    ]);
+}
+
+function _sse_subscription_get_node_json_from_nid($nid) {
     $node = node_load($nid);
     $result = [];
 
@@ -497,17 +540,20 @@ function get_node_json_from_nid($nid) {
     return $result;
 }
 
-function sse_subscription_handle_get_article_api($from) {
+/**
+ * GET /subscribe/api/get_article/:token/:since
+ */
+function sse_subscription_handle_get_article_api($since) {
     $nids = db_select('node', 'n')
         ->condition('type', 'notice_content')
         ->condition('status', 1)
-        ->condition('changed', (int)$from, '>')
+        ->condition('changed', (int)$since, '>')
         ->fields('n', array('nid'))
         ->execute();
 
     $result = [];
     foreach ($nids as $record) {
-        $result[] = get_node_json_from_nid($record->nid);
+        $result[] = _sse_subscription_get_node_json_from_nid($record->nid);
     }
 
     drupal_json_output($result);
@@ -518,20 +564,9 @@ function sse_subscription_handle_get_article_api($from) {
  */
 function sse_subscription_theme() {
     return array(
-        'sse_subscription_enter' => array(
-            'template' => 'templates/sse_subscription_enter',
-        ),
-        'sse_subscription_sub' => array(
-            'template' => 'templates/sse_subscription_sub',
-            'variables' => array('email' => null, 'target' => null, 'category' => null),
-        ),
-        'sse_subscription_unsub' => array(
-            'template' => 'templates/sse_subscription_unsub',
-            'variables' => array('email' => null),
-        ),
         'sse_subscription_mail' => array(
             'template' => 'templates/sse_subscription_mail',
-            'variables' => array('url' => null),
+            'variables' => array('verify_url' => null),
         )
     );
 }
