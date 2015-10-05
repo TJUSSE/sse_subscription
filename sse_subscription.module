@@ -36,6 +36,26 @@ function sse_subscription_send_mail($to, $subject, $html) {
 }
 
 /**
+ * implement hook_ds_fields_info()
+ *
+ * 创建「通知订阅」的字段
+ */
+function sse_subscription_ds_fields_info($entity_type) {
+    $views_fields = [];
+
+    $views_fields['notice_subscribe_block'] = [
+        'title' => t('通知：订阅区块'),
+        'field_type' => DS_FIELD_TYPE_BLOCK,
+        'properties' => [
+            'block' => 'sse_subscription|notice_subscribe_block',
+            'block_render' => DS_BLOCK_CONTENT
+        ]
+    ];
+    
+    return ['ds_views' => $views_fields];
+}
+
+/**
  * implement hook_block_info()
  *
  * 创建「通知订阅」的区块
